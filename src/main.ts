@@ -15,6 +15,7 @@ import { FlowField } from "./render/flowfield";
 import { Trails } from "./render/trails";
 import { Post } from "./render/post";
 import { wireUI } from "./ui";
+import { Ambience } from "./audio";
 
 async function boot() {
   const nogpu = document.getElementById("nogpu")!;
@@ -66,6 +67,19 @@ async function boot() {
 
   wireUI(jelly, plankton, flow, bell);
 
+  // procedural underwater ambience — starts on the first gesture (autoplay policy)
+  const ambience = new Ambience();
+  const startAudio = () => { ambience.start(); window.removeEventListener("pointerdown", startAudio); };
+  window.addEventListener("pointerdown", startAudio);
+  const soundBtn = document.getElementById("sound");
+  soundBtn?.addEventListener("click", () => {
+    ambience.start();
+    ambience.setMuted(!ambience.muted);
+    soundBtn.textContent = ambience.muted ? "♪̸" : "♪";
+    soundBtn.classList.toggle("off", ambience.muted);
+  });
+  let prevAct = 0;
+
   // click (not drag) → eager stroke
   let downAt = 0, downX = 0, downY = 0;
   renderer.domElement.addEventListener("pointerdown", (e) => { downAt = performance.now(); downX = e.clientX; downY = e.clientY; });
@@ -97,6 +111,8 @@ async function boot() {
 
     // simulation
     jelly.update(dt);
+    if (prevAct < 0.12 && jelly.actVis >= 0.12) ambience.pulse(0.5 + jelly.pulse * 0.5);
+    prevAct = jelly.actVis;
     shash.build();
     fluid.update(dt);
     plankton.update(dt, camera);
