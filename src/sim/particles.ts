@@ -7,7 +7,7 @@ import { MeshBasicNodeMaterial } from "three/webgpu";
 import * as TSL from "three/tsl";
 const {
   Fn, instancedArray, instanceIndex, uniform, float, vec3, If, uv,
-  hash, length, smoothstep, mix, positionLocal, max,
+  hash, length, smoothstep, mix, positionLocal, max, clamp, varying,
 } = TSL as unknown as Record<string, any>;
 import { CONF } from "../config";
 import type { Fluid } from "./fluid";
@@ -18,6 +18,8 @@ const N = CONF.particles.count;
 export class Plankton {
   readonly mesh: THREE.InstancedMesh;
   readonly uGlow = uniform(1);
+  /** "show currents" mode: streaks lengthen & brighten with flow speed (0 or 1) */
+  readonly uFlowViz = uniform(0);
   private uCamRight = uniform(new THREE.Vector3(1, 0, 0));
   private uCamUp = uniform(new THREE.Vector3(0, 1, 0));
   private uDt = uniform(1 / 60);
@@ -25,9 +27,14 @@ export class Plankton {
   private inited = false;
 
   constructor(private renderer: THREE.WebGPURenderer, fluid: Fluid, shash: SpatialHash) {
+    // NOTE: velocity + glow share one vec4 buffer — the update kernel binds pPos, this,
+    // u/v/w, the hash (cnt+slots) and the bell nodes: exactly 8 storage buffers, the
+    // WebGPU default per-stage limit. Splitting glow out pushes it to 9 and the whole
+    // compute pipeline silently dies with a validation error.
     const pPos = instancedArray(N, "vec3");
-    const pGlow = instancedArray(N, "float");
+    const pVelGlow = instancedArray(N, "vec4"); // xyz = fluid velocity, w = glow envelope
     const ext = fluid.ext;
+    const vec4 = (TSL as unknown as Record<string, any>).vec4;
 
     this.kInit = Fn(() => {
       const i = instanceIndex;
@@ -36,7 +43,7 @@ export class Plankton {
       const ry = hash(fi.mul(0.02313).add(7.7)).sub(0.5).mul(ext.y * 0.96);
       const rz = hash(fi.mul(0.00931).add(3.1)).sub(0.5).mul(ext.z * 0.96);
       pPos.element(i).assign(vec3(rx, ry, rz));
-      pGlow.element(i).assign(0);
+      pVelGlow.element(i).assign(vec4(0, 0, 0, 0));
     })().compute(N);
 
     this.kUpdate = Fn(() => {
@@ -69,9 +76,9 @@ export class Plankton {
       If(p.z.lessThan(-hz), () => p.z.addAssign(ext.z));
       pPos.element(i).assign(p);
       // brightness follows flow speed, with a soft envelope
-      const g = pGlow.element(i).toVar();
+      const g = pVelGlow.element(i).w.toVar();
       const target = smoothstep(0.03, 0.5, length(vF));
-      pGlow.element(i).assign(g.add(target.sub(g).mul(0.08)));
+      pVelGlow.element(i).assign(vec4(vF, g.add(target.sub(g).mul(0.08))));
     })().compute(N);
 
     // ---- rendering: camera-facing additive motes ----
@@ -83,14 +90,43 @@ export class Plankton {
     const fi = float(i);
     const p = pPos.element(i);
     const size = float(CONF.particles.size).mul(hash(fi.mul(1.317)).mul(1.4).add(0.45));
-    mat.positionNode = p
-      .add(this.uCamRight.mul(positionLocal.x.mul(size)))
-      .add(this.uCamUp.mul(positionLocal.y.mul(size)));
+    // motion-streaked motes: the quad stretches along the screen-projected flow
+    // direction, so the water's motion is readable at a glance. Built purely in the
+    // camera's right/up basis — no cross products, no degenerate normalize.
+    const DBG = new URL(location.href).searchParams.has("pp");
+    const vp = pVelGlow.element(i).xyz.toVar();
+    const vx = vp.dot(this.uCamRight).toVar();
+    const vy = vp.dot(this.uCamUp).toVar();
+    const sp = vx.mul(vx).add(vy.mul(vy)).add(1e-8).sqrt().toVar();
+    const ax = vx.div(sp).mul(sp.min(1)).add(sp.min(1).oneMinus()).toVar(); // → (1,0) when still
+    const ay = vy.div(sp).mul(sp.min(1)).toVar();
+    const an = ax.mul(ax).add(ay.mul(ay)).sqrt().add(1e-6);
+    const axn = ax.div(an).toVar();
+    const ayn = ay.div(an).toVar();
+    const stretch = clamp(sp.mul(6).add(1), 1, 4.5)
+      .mul(this.uFlowViz.mul(clamp(sp.mul(4), 0, 2.5)).add(1)).toVar();
+    const lx = positionLocal.x.mul(size).mul(stretch);
+    const ly = positionLocal.y.mul(size);
+    mat.positionNode = DBG
+      ? p.add(this.uCamRight.mul(positionLocal.x.mul(size))).add(this.uCamUp.mul(positionLocal.y.mul(size)))
+      : p.add(this.uCamRight.mul(axn.mul(lx).sub(ayn.mul(ly))))
+        .add(this.uCamUp.mul(ayn.mul(lx).add(axn.mul(ly))));
+    // fragment-side values must cross the stage boundary explicitly
+    const vStretch = varying(stretch);
+    const vGlow = varying(pVelGlow.element(i).w);
+    const vSp = varying(sp);
     const dot = smoothstep(0.5, 0.05, length(uv().sub(0.5)));
     const warm = smoothstep(0.85, 0.87, hash(fi.mul(0.531)));
-    mat.colorNode = mix(vec3(0.55, 0.78, 1.0), vec3(1.0, 0.83, 0.55), warm);
+    const baseCol = mix(vec3(0.55, 0.78, 1.0), vec3(1.0, 0.83, 0.55), warm);
+    // currents mode: fast water tints toward hot white so the jet reads instantly
+    const speedTint = mix(vec3(0.25, 0.6, 1.0), vec3(1.0, 1.0, 0.92), smoothstep(0.06, 0.7, vSp));
+    mat.colorNode = mix(baseCol, speedTint, this.uFlowViz);
     const twinkle = hash(fi.mul(2.71)).mul(0.5).add(0.5);
-    mat.opacityNode = dot.mul(pGlow.element(i).mul(0.85).add(0.10)).mul(twinkle).mul(this.uGlow);
+    mat.opacityNode = DBG
+      ? dot.mul(0.5)
+      : dot.mul(vGlow.mul(0.85).add(0.10)).mul(twinkle)
+          .div(vStretch.sqrt()).mul(this.uGlow)
+          .mul(this.uFlowViz.mul(smoothstep(0.05, 0.4, vSp)).mul(2).add(1));
 
     this.mesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), mat, N);
     this.mesh.frustumCulled = false;

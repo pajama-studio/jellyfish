@@ -8,6 +8,7 @@ import * as TSL from "three/tsl";
 const {
   attribute, uniform, float, int, vec3, varying, normalize, abs, sin, pow,
   smoothstep, mix, clamp, positionWorld, cameraPosition, atan, mx_noise_float,
+  fract, select,
 } = TSL as unknown as Record<string, any>;
 import { CONF } from "../config";
 import type { Jellyfish } from "../sim/jellyfish";
@@ -21,6 +22,7 @@ export class Bell {
   readonly uTime = uniform(0);
   readonly uAct = uniform(0);          // current margin muscle activation (CPU mirror)
   readonly uCenter = uniform(new THREE.Vector3());
+  readonly uMuscleVis = uniform(0.9);  // muscle-layer visibility (panel toggle)
 
   constructor(jelly: Jellyfish) {
     // ---- static index/attribute construction (positions live on the GPU) ----
@@ -105,13 +107,28 @@ export class Bell {
     col = col.add(canalCol.mul(canal).mul(0.5));
     // subtle interior warm glow that pulses with the muscle
     col = col.add(vec3(1.0, 0.7, 0.6).mul(this.uAct).mul(smoothstep(0.6, 0.1, vRing)).mul(vLayer).mul(0.35));
+
+    // --- the muscle itself, made visible: circumferential fibres on the subumbrellar
+    // (inner) surface, lit by the live activation wave exactly as the sim computes it ---
+    const J = CONF.jelly.muscle;
+    const ph = fract(jelly.uPhase.sub(jelly.uWave.mul(vRing)));
+    const atkF = float(J.attack);
+    const actHere = select(ph.lessThan(atkF),
+      smoothstep(0, J.attack, ph),
+      smoothstep(J.attack, J.attack + 0.42, ph).oneMinus());
+    const muscleW = pow(vRing, 1.6);
+    const fibres = pow(abs(sin(vRing.mul(52))), 2.0).mul(0.7).add(0.3); // ring striations
+    const mGlow = actHere.mul(muscleW).mul(fibres).mul(vLayer).mul(this.uMuscleVis);
+    col = col.add(vec3(1.0, 0.30, 0.22).mul(mGlow).mul(1.1));
+
     mat.colorNode = clamp(col, 0, 3);
 
     const alpha = float(0.13)
       .add(fres.mul(0.42))
       .add(gonad.mul(0.3))
       .add(canal.mul(0.22))
-      .add(rim.mul(0.28));
+      .add(rim.mul(0.28))
+      .add(mGlow.mul(0.3));
     mat.opacityNode = clamp(alpha, 0, 0.92);
 
     this.mesh = new THREE.Mesh(geo, mat);

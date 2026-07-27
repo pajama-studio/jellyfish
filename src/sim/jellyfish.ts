@@ -43,8 +43,8 @@ export class Jellyfish {
   readonly uWave = uniform(J.muscle.wave);
   readonly uAlphaBell = uniform(0.1);   // per-frame fluid-grip fraction (bell)
   readonly uAlphaTent = uniform(0.05);
-  readonly uMomBell = uniform(0.2);     // node↔cell water-mass ratio for splat-back
-  readonly uMomTent = uniform(0.05);
+  readonly uMomBell = uniform(0.45);    // node↔cell water-mass ratio for splat-back
+  readonly uMomTent = uniform(0.08);
   readonly uDtSub = uniform(1 / 480);
   readonly uDtFrame = uniform(1 / 60);
   readonly uK = uniform(new THREE.Vector4(J.kStruct, J.kShear, J.kThick, J.kMuscleBase));
@@ -259,7 +259,10 @@ export class Jellyfish {
       });
     })().compute(NBELL);
 
-    // one thread per chain: verlet + fluid drag + distance constraints (root pinned)
+    // one thread per chain: verlet + fluid drag + distance constraints (root pinned).
+    // NOTE: no splat-back to the fluid here — chainSeg/chainRoot/tPos/tPrev/pos + u/v/w
+    // is already 8 storage buffers, the WebGPU per-stage limit. Adding the 3 impulse
+    // buffers made the pipeline silently fail validation (tentacles froze).
     this.kTent = Fn(() => {
       const c = int(instanceIndex);
       const segLen = chainSeg.element(c).x;
@@ -275,7 +278,6 @@ export class Jellyfish {
         const vF = this.fluid.velAt(p);
         const dv = vF.sub(v).mul(this.uAlphaTent).toVar();
         v.addAssign(dv);
-        this.fluid.splatImpulse(p, dv.negate().mul(this.uMomTent));
         v.y.subAssign(float(0.12).mul(dt)); // tentacles sink gently
         v.mulAssign(dampT);
         this.tPrev.element(id).assign(p);

@@ -14,10 +14,14 @@ export const CONF = {
   fluid: {
     projectIters: LOW ? 10 : 14, // red-black SOR sweeps
     overRelax: 1.7,
-    damping: 0.35,      // per-second velocity decay (open-water energy loss)
+    damping: 0.12,      // per-second velocity decay (open-water energy loss)
     dt: 1 / 60,         // fixed fluid step, decoupled from render dt
-    treadmillGain: 0.55, // vertical counter-current that keeps the jelly centred
-    treadmillMax: 0.5,
+    // recentring counter-current: OFF inside the dead zone (so real swimming is visible),
+    // then ramps up — the jelly can genuinely rise ~a body length before the "current"
+    // starts carrying the world past it.
+    treadmillGain: 1.6,
+    treadmillDeadZone: 1.0,
+    treadmillMax: 0.6,
   },
 
   // ---- jellyfish soft body (Rudolf & Mould 2009, taken to true 3D) ----
@@ -36,9 +40,9 @@ export const CONF = {
     kDamp: 14,          // spring damping (along spring axis)
     globalDamp: 0.9,    // per-second viscous damping on node velocity
     substeps: 8,        // spring substeps per frame
-    sink: 0.06,         // gravity minus buoyancy (net slow sink when idle)
-    drag: 7.0,          // fluid↔body momentum-exchange coefficient (bell)
-    dragTentacle: 2.4,
+    sink: 0.1,          // gravity minus buoyancy (net slow sink when idle)
+    drag: 16.0,         // fluid↔body momentum-exchange coefficient (bell)
+    dragTentacle: 3.0,
     muscle: {
       freq: 0.72,       // Hz — near the resonant gait of a real medusa (paper §3.3)
       contract: 0.42,   // max rest-length reduction of muscle springs (paper: down to 0.56×)

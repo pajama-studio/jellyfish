@@ -84,12 +84,16 @@ export class Fluid {
 
   constructor(private renderer: THREE.WebGPURenderer) {
     const damp = () => this.uDampF;
-    // recentring "treadmill" current: a gentle uniform counter-flow proportional to how far
-    // the jelly's centroid has drifted from the origin (read straight from the GPU buffer —
-    // the whole control loop lives on the GPU, no readback)
-    const tread = (axis: "x" | "y" | "z", scale: number) =>
-      clamp(this.centBuf.element(int(0))[axis].negate().mul(this.uTreadK).mul(scale),
+    // recentring "treadmill" current, GPU-side (reads the centroid buffer — no readback).
+    // Dead zone: no interference near the origin, so genuine swimming stays visible;
+    // beyond it a counter-current ramps up and carries the water column past the jelly.
+    const tread = (axis: "x" | "y" | "z", scale: number) => {
+      const c = this.centBuf.element(int(0))[axis];
+      const dz = float(CONF.fluid.treadmillDeadZone).mul(scale === 1 ? 1 : 0.7);
+      const excess = c.sign().mul(c.abs().sub(dz).max(0));
+      return clamp(excess.negate().mul(this.uTreadK).mul(scale),
         float(CONF.fluid.treadmillMax).negate(), float(CONF.fluid.treadmillMax));
+    };
 
     // ---- 1. apply accumulated body impulses + damping + recentring current ----
     this.kApplyU = Fn(() => {

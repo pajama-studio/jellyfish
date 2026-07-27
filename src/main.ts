@@ -60,7 +60,7 @@ async function boot() {
   scene.add(env.group, plankton.mesh, tentacles.mesh, bell.mesh);
   const post = new Post(renderer, scene, camera);
 
-  wireUI(jelly, plankton);
+  wireUI(jelly, plankton, bell);
 
   // click (not drag) → eager stroke
   let downAt = 0, downX = 0, downY = 0;
