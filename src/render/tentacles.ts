@@ -75,8 +75,8 @@ export class Tentacles {
     const armTex = armTexture();
     const armUv = vec2(side.mul(0.5).add(0.5), segF.mul(1.0));
     const armSample = texture(armTex, armUv).toVar();
-    const tentCol = vec3(0.72, 0.4, 0.28); // maroon sea-nettle tentacles
-    mat.colorNode = mix(tentCol, armSample.rgb.mul(0.8), isArm);
+    const tentCol = vec3(0.55, 0.85, 1.0); // bioluminescent ice-cyan threads
+    mat.colorNode = mix(tentCol, armSample.rgb.mul(0.85), isArm);
     const fade = smoothstep(1.0, 0.2, segF);
     const alphaT = fade.mul(0.38);
     const alphaA = armSample.a.mul(fade).mul(0.42);

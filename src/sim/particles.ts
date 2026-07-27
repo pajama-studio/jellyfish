@@ -124,7 +124,7 @@ export class Plankton {
     const vSp = varying(sp);
     const dot = smoothstep(0.5, 0.05, length(uv().sub(0.5)));
     const warm = smoothstep(0.85, 0.87, hash(fi.mul(0.531)));
-    const baseCol = mix(vec3(0.55, 0.78, 1.0), vec3(1.0, 0.83, 0.55), warm);
+    const baseCol = mix(vec3(0.45, 0.8, 1.0), vec3(1.0, 0.5, 0.85), warm); // cyan + rare magenta motes
     // currents mode: fast water tints toward hot white so the jet reads instantly
     const speedTint = mix(vec3(0.25, 0.6, 1.0), vec3(1.0, 1.0, 0.92), smoothstep(0.06, 0.7, vSp));
     mat.colorNode = mix(baseCol, speedTint, this.uFlowViz);

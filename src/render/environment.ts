@@ -57,7 +57,7 @@ export class Environment {
     glowMat.side = THREE.DoubleSide;
     const gu = uv();
     const d = gu.sub(0.5).length();
-    glowMat.colorNode = vec3(1.0, 0.85, 0.6);
+    glowMat.colorNode = vec3(0.75, 0.9, 1.0);
     glowMat.opacityNode = smoothstep(0.5, 0.0, d).pow(2.2).mul(0.5);
     const glow = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), glowMat);
     glow.position.set(2, 16, -6);

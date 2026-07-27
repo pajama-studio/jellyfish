@@ -117,11 +117,25 @@ export class Bell {
       .add(texture(causTex, causUv1).r.mul(0.35)).mul(diff);
 
     const spec = pow(max(dot(reflect(L.negate(), Nw), V.negate()), 0), 30).mul(0.6);
-    const rimCol = vec3(0.65, 0.85, 1.0);
+    const rimCol = vec3(0.5, 0.95, 1.0);
 
     let col = colorMap.rgb.mul(diff.mul(0.62).add(caus.mul(0.7)).add(0.16));
-    col = col.add(rimCol.mul(fres).mul(0.4));
-    col = col.add(vec3(1.0, 0.95, 0.85).mul(spec).mul(0.6));
+    col = col.add(rimCol.mul(fres).mul(0.55));
+    col = col.add(vec3(0.9, 0.97, 1.0).mul(spec).mul(0.5));
+
+    // ---- bioluminescence ----
+    // neon margin edge: a thin electric-cyan line of light at the bell's rim,
+    // breathing with the contraction wave
+    const edge = smoothstep(0.95, 1.0, vRing);
+    const breathe = this.uAct.mul(0.9).add(0.55);
+    col = col.add(vec3(0.25, 1.0, 0.95).mul(edge).mul(breathe).mul(0.75));
+    // photophores: 24 glowing points spaced around the margin
+    const photo = pow(abs(sin(sigma.mul(12))), 60.0).mul(smoothstep(0.86, 0.97, vRing));
+    col = col.add(vec3(0.6, 1.0, 0.85).mul(photo).mul(breathe).mul(1.6));
+    // magenta gonad glow shining through the apex
+    const gonad = pow(abs(sin(sigma.mul(2).add(0.7))), 5.0)
+      .mul(smoothstep(0.42, 0.12, vRing)).mul(smoothstep(0.03, 0.12, vRing));
+    col = col.add(vec3(1.0, 0.35, 0.8).mul(gonad).mul(0.55));
 
     // the muscle made visible: subumbrellar fibre bands lit by the live activation wave
     const J = CONF.jelly.muscle;
@@ -133,7 +147,7 @@ export class Bell {
     const muscleW = pow(vRing, 1.6);
     const fibres = pow(abs(sin(vRing.mul(52))), 2.0).mul(0.7).add(0.3);
     const mGlow = actHere.mul(muscleW).mul(fibres).mul(vLayer).mul(this.uMuscleVis);
-    col = col.add(vec3(1.0, 0.34, 0.2).mul(mGlow).mul(0.9));
+    col = col.add(vec3(1.0, 0.3, 0.75).mul(mGlow).mul(0.9));
 
     mat.colorNode = clamp(col, 0, 3);
 

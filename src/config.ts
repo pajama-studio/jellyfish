@@ -69,7 +69,7 @@ export const CONF = {
   // ---- rendering ----
   render: {
     maxPixelRatio: LOW ? 1.5 : 2,
-    bloom: { strength: 0.55, radius: 0.45, threshold: 0.32 },
+    bloom: { strength: 0.7, radius: 0.5, threshold: 0.26 },
     fogColor: 0x04101f,
   },
 } as const;

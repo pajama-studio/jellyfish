@@ -125,8 +125,8 @@ export class Trails {
 
     const vAge = varying(age);
     const vSp = varying(s4.w);
-    const slow = vec3(0.25, 0.55, 0.95);
-    const fastC = vec3(1.0, 0.97, 0.85);
+    const slow = vec3(0.2, 0.5, 1.0);
+    const fastC = vec3(0.6, 1.0, 0.95); // aurora mint-cyan
     mat.colorNode = mix(slow, fastC, smoothstep(0.06, 0.7, vSp)).mul(vAge.mul(0.55).oneMinus());
     mat.opacityNode = vAge.oneMinus().pow(2).mul(smoothstep(0.025, 0.25, vSp)).mul(0.5);
 
