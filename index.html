@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>jellyfish · a WebGPU soft-body × fluid simulation</title>
+  <meta name="description" content="A real-time 3D jellyfish: spring-mass soft body swimming inside a live 3D fluid simulation, all on the GPU. Open source, by Pajama Studio." />
+  <meta property="og:title" content="jellyfish.rand.monster" />
+  <meta property="og:description" content="A jellyfish that actually swims — soft body × 3D fluid, simulated live on your GPU." />
+  <style>
+    :root {
+      --ink: #eaf2ff;
+      --dim: #9db4d0;
+      --accent: #ffd9a0;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; background: #04101f; }
+    body {
+      font-family: "Avenir Next", "Nunito", -apple-system, "Segoe UI", sans-serif;
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+    }
+    canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+    .overlay { position: fixed; z-index: 2; pointer-events: none; }
+    #title { top: 22px; left: 26px; }
+    #title h1 {
+      font-family: Georgia, "Times New Roman", serif;
+      font-style: italic; font-weight: 500;
+      font-size: 28px; letter-spacing: 0.5px;
+      text-shadow: 0 2px 18px rgba(80, 160, 255, 0.35);
+    }
+    #title p { font-size: 12.5px; color: var(--dim); margin-top: 4px; letter-spacing: 0.3px; }
+    #title a { color: var(--accent); text-decoration: none; pointer-events: auto; }
+    #hint {
+      bottom: 20px; left: 50%; transform: translateX(-50%);
+      font-size: 12px; color: var(--dim); letter-spacing: 0.4px;
+      background: rgba(4, 16, 31, 0.35); padding: 6px 14px; border-radius: 999px;
+      backdrop-filter: blur(6px); white-space: nowrap;
+      transition: opacity 1s ease;
+    }
+    #corner {
+      bottom: 18px; right: 22px; font-size: 11.5px; color: var(--dim);
+      text-align: right; line-height: 1.7;
+    }
+    #corner a { color: var(--dim); pointer-events: auto; }
+    #corner a:hover { color: var(--ink); }
+    #fps { top: 24px; right: 26px; font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; }
+    #panel {
+      top: 46px; right: 26px; pointer-events: auto;
+      background: rgba(6, 20, 38, 0.55); border: 1px solid rgba(140, 180, 230, 0.15);
+      border-radius: 14px; padding: 12px 14px; width: 190px;
+      backdrop-filter: blur(10px); font-size: 11.5px; color: var(--dim);
+      display: none;
+    }
+    #panel.open { display: block; }
+    #panel label { display: block; margin: 8px 0 2px; }
+    #panel input[type="range"] { width: 100%; accent-color: #7fb4e8; }
+    #gear {
+      top: 20px; right: 60px; pointer-events: auto; cursor: pointer;
+      font-size: 15px; opacity: 0.55; user-select: none;
+    }
+    #gear:hover { opacity: 1; }
+    #nogpu {
+      inset: 0; display: none; place-items: center; text-align: center;
+      background: radial-gradient(ellipse at 50% 40%, #0a2138, #04101f 70%);
+      pointer-events: auto; padding: 32px;
+    }
+    #nogpu h2 { font-family: Georgia, serif; font-style: italic; font-weight: 500; margin-bottom: 12px; }
+    #nogpu p { color: var(--dim); font-size: 14px; line-height: 1.7; max-width: 440px; }
+    #nogpu a { color: var(--accent); }
+    #loading {
+      inset: 0; display: grid; place-items: center;
+      background: #04101f; transition: opacity 0.9s ease; z-index: 3;
+    }
+    #loading span { font-family: Georgia, serif; font-style: italic; color: var(--dim); font-size: 15px; animation: breathe 2.2s ease-in-out infinite; }
+    @keyframes breathe { 0%,100% { opacity: 0.35; } 50% { opacity: 0.9; } }
+  </style>
+</head>
+<body>
+  <div id="loading" class="overlay"><span>warming the water…</span></div>
+  <div id="title" class="overlay">
+    <h1>jellyfish</h1>
+    <p>a soft body swimming in a live 3D fluid, on your GPU · <a href="https://pajama.studio" target="_blank" rel="noopener">pajama studio</a></p>
+  </div>
+  <div id="fps" class="overlay"></div>
+  <div id="gear" class="overlay" title="tuning">☼</div>
+  <div id="panel" class="overlay">
+    <label>pulse rate <input id="uiFreq" type="range" min="0.3" max="1.3" step="0.01" /></label>
+    <label>contraction <input id="uiContract" type="range" min="0.15" max="0.65" step="0.01" /></label>
+    <label>water grip <input id="uiDrag" type="range" min="1" max="14" step="0.1" /></label>
+    <label>plankton glow <input id="uiGlow" type="range" min="0.2" max="2.0" step="0.01" /></label>
+  </div>
+  <div id="hint" class="overlay">drag to orbit · scroll to zoom · <b>click the water to pulse</b></div>
+  <div id="corner" class="overlay">
+    <a href="https://github.com/pajama-studio/jellyfish" target="_blank" rel="noopener" id="ghlink">open source</a> ·
+    after <a href="https://gigl.scs.carleton.ca/node/114" target="_blank" rel="noopener">Rudolf&nbsp;&amp;&nbsp;Mould 2009</a>
+    &amp; <a href="https://matthias-research.github.io/pages/tenMinutePhysics/" target="_blank" rel="noopener">Ten&nbsp;Minute&nbsp;Physics</a>
+  </div>
+  <div id="nogpu" class="overlay">
+    <div>
+      <h2>this aquarium needs WebGPU</h2>
+      <p>The whole simulation — the fluid, the jellyfish's body, the plankton — runs in GPU
+      compute shaders. Please visit in a recent Chrome, Edge, or Safari&nbsp;26+ /
+      Firefox&nbsp;141+ with WebGPU enabled.</p>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
