@@ -23,10 +23,12 @@ export class Post {
     const Lout = clamp(
       Lin.mul(Lin.mul(2.51).add(0.03)).div(Lin.mul(Lin.mul(2.43).add(0.59)).add(0.14)), 0, 1);
     let x = clamp(lin.mul(Lout.div(max(Lin, float(1e-5)))), 0, 1);
+    // underwater grade: gentle teal cast pulls everything below the surface
+    x = mix(x, x.mul(vec3(0.72, 0.96, 1.04)), 0.4);
     // soft cool vignette — frames the jelly like a diver's memory of it
     const vd = length(screenUV.sub(vec2(0.5, 0.46)));
-    const vig = smoothstep(0.35, 0.95, vd);
-    x = mix(x, x.mul(vec3(0.55, 0.72, 0.9)).mul(0.55), vig.mul(0.55));
+    const vig = smoothstep(0.32, 0.95, vd);
+    x = mix(x, x.mul(vec3(0.45, 0.65, 0.88)).mul(0.5), vig.mul(0.62));
     this.post.outputNode = x;
   }
 

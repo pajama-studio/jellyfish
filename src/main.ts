@@ -39,7 +39,7 @@ async function boot() {
   }
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(CONF.render.fogColor, 9, 26);
+  scene.fog = new THREE.Fog(CONF.render.fogColor, 5.5, 17);
   const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.05, 100);
   camera.position.set(0.6, 0.35, 3.6);
 

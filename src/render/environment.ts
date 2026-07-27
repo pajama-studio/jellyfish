@@ -1,6 +1,8 @@
-// Deep-sea backdrop: a big gradient sphere + a few slow additive light shafts from above.
+// Deep-sea backdrop: a big gradient sphere, slow god-ray planes, and soft
+// fresnel-edged volumetric light cones descending from the surface.
 import * as THREE from "three/webgpu";
 import { MeshBasicNodeMaterial } from "three/webgpu";
+import * as TSL from "three/tsl";
 import {
   uniform, float, vec3, mix, smoothstep, clamp, positionWorld, uv, sin, abs,
 } from "three/tsl";
@@ -9,6 +11,8 @@ export class Environment {
   readonly group = new THREE.Group();
   private uTime = uniform(0);
   private shafts: THREE.Group;
+  private cone1?: THREE.Mesh;
+  private cone2?: THREE.Mesh;
 
   constructor() {
     // gradient dome
@@ -37,16 +41,43 @@ export class Environment {
     const band = abs(sin(u.x.mul(9.0).add(this.uTime.mul(0.13)))).pow(3.0);
     const vFade = smoothstep(0.0, 0.45, u.y).mul(smoothstep(1.0, 0.6, u.y));
     const hFade = smoothstep(0.0, 0.2, u.x).mul(smoothstep(1.0, 0.8, u.x));
-    shaftMat.colorNode = vec3(0.5, 0.62, 0.66);
-    shaftMat.opacityNode = band.mul(vFade).mul(hFade).mul(0.07);
-    for (let i = 0; i < 5; i++) {
-      const plane = new THREE.Mesh(new THREE.PlaneGeometry(26, 24), shaftMat);
+    shaftMat.colorNode = vec3(0.45, 0.68, 0.72);
+    shaftMat.opacityNode = band.mul(vFade).mul(hFade).mul(0.11);
+    for (let i = 0; i < 7; i++) {
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(26, 26), shaftMat);
       plane.position.set(0, 12, 0);
-      plane.rotation.y = (i / 5) * Math.PI;
+      plane.rotation.y = (i / 7) * Math.PI;
       plane.renderOrder = -5;
       plane.frustumCulled = false;
       this.shafts.add(plane);
     }
+
+    // volumetric light cones descending from the surface — soft fresnel-edged,
+    // slowly counter-rotating, with animated density bands: cheap volume lighting
+    const mkCone = (rTop: number, rBot: number, hgt: number, y: number, op: number, dir: number) => {
+      const m = new MeshBasicNodeMaterial();
+      m.transparent = true;
+      m.depthWrite = false;
+      m.blending = THREE.AdditiveBlending;
+      m.side = THREE.DoubleSide;
+      const cu = uv();
+      const nrm = (TSL as unknown as Record<string, any>).normalWorld;
+      const viewDir = (TSL as unknown as Record<string, any>).positionWorld.sub(
+        (TSL as unknown as Record<string, any>).cameraPosition).normalize();
+      const rimSoft = nrm.dot(viewDir).abs().pow(1.6); // faces edge-on fade out → soft silhouette
+      const bands = abs(sin(cu.x.mul(14).add(this.uTime.mul(dir * 0.05)))).pow(2.0).mul(0.6).add(0.4);
+      const vfade = smoothstep(0.0, 0.35, cu.y).mul(smoothstep(1.05, 0.55, cu.y));
+      m.colorNode = vec3(0.55, 0.78, 0.85);
+      m.opacityNode = rimSoft.mul(bands).mul(vfade).mul(op);
+      const cone = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, hgt, 40, 1, true), m);
+      cone.position.set(0.8, y, -1.5);
+      cone.renderOrder = -4;
+      cone.frustumCulled = false;
+      this.shafts.add(cone);
+      return cone;
+    };
+    this.cone1 = mkCone(1.6, 5.2, 15, 9.5, 0.16, 1);
+    this.cone2 = mkCone(2.6, 7.5, 16, 9.0, 0.1, -1);
     this.group.add(this.shafts);
 
     // warm sun glow far above — gives the amber palette its light source
@@ -71,5 +102,7 @@ export class Environment {
   update(t: number) {
     this.uTime.value = t;
     this.shafts.rotation.y = t * 0.012;
+    if (this.cone1) this.cone1.rotation.y = t * 0.05;
+    if (this.cone2) this.cone2.rotation.y = -t * 0.033;
   }
 }

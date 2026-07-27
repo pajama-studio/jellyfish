@@ -127,15 +127,15 @@ export class Bell {
     // neon margin edge: a thin electric-cyan line of light at the bell's rim,
     // breathing with the contraction wave
     const edge = smoothstep(0.95, 1.0, vRing);
-    const breathe = this.uAct.mul(0.9).add(0.55);
-    col = col.add(vec3(0.25, 1.0, 0.95).mul(edge).mul(breathe).mul(0.75));
-    // photophores: 24 glowing points spaced around the margin
-    const photo = pow(abs(sin(sigma.mul(12))), 60.0).mul(smoothstep(0.86, 0.97, vRing));
-    col = col.add(vec3(0.6, 1.0, 0.85).mul(photo).mul(breathe).mul(1.6));
+    const breathe = this.uAct.mul(0.9).add(0.6);
+    col = col.add(vec3(0.25, 1.0, 0.95).mul(edge).mul(breathe).mul(1.05));
+    // photophores: glowing beads spaced around the margin
+    const photo = pow(abs(sin(sigma.mul(12))), 36.0).mul(smoothstep(0.86, 0.97, vRing));
+    col = col.add(vec3(0.6, 1.0, 0.85).mul(photo).mul(breathe).mul(2.2));
     // magenta gonad glow shining through the apex
     const gonad = pow(abs(sin(sigma.mul(2).add(0.7))), 5.0)
       .mul(smoothstep(0.42, 0.12, vRing)).mul(smoothstep(0.03, 0.12, vRing));
-    col = col.add(vec3(1.0, 0.35, 0.8).mul(gonad).mul(0.55));
+    col = col.add(vec3(1.0, 0.35, 0.8).mul(gonad).mul(0.75));
 
     // the muscle made visible: subumbrellar fibre bands lit by the live activation wave
     const J = CONF.jelly.muscle;

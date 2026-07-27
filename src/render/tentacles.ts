@@ -75,11 +75,14 @@ export class Tentacles {
     const armTex = armTexture();
     const armUv = vec2(side.mul(0.5).add(0.5), segF.mul(1.0));
     const armSample = texture(armTex, armUv).toVar();
-    const tentCol = vec3(0.55, 0.85, 1.0); // bioluminescent ice-cyan threads
-    mat.colorNode = mix(tentCol, armSample.rgb.mul(0.85), isArm);
+    // bioluminescent threads with light pulses travelling down toward the tips
+    const pulse = sin(segF.mul(-7).add(this.uTime.mul(2.2)).add(chain.mul(1.3)))
+      .mul(0.5).add(0.5).pow(3.0);
+    const tentCol = vec3(0.55, 0.9, 1.0).mul(pulse.mul(1.4).add(0.75));
+    mat.colorNode = mix(tentCol, armSample.rgb.mul(pulse.mul(0.5).add(0.8)), isArm);
     const fade = smoothstep(1.0, 0.2, segF);
-    const alphaT = fade.mul(0.38);
-    const alphaA = armSample.a.mul(fade).mul(0.42);
+    const alphaT = fade.mul(pulse.mul(0.25).add(0.42));
+    const alphaA = armSample.a.mul(fade).mul(0.45);
     mat.opacityNode = clamp(mix(alphaT, alphaA, isArm), 0, 1);
 
     this.mesh = new THREE.Mesh(geo, mat);
