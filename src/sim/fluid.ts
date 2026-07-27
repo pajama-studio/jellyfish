@@ -60,22 +60,27 @@ export class Fluid {
   private sampleVT = this.makeSampler(this.vT, nx, ny + 1, nz, 0.5, 0, 0.5);
   private sampleWT = this.makeSampler(this.wT, nx, ny, nz + 1, 0.5, 0.5, 0);
 
-  /** world-space velocity sample — usable from any other kernel */
-  readonly velAt: any = Fn(([pw]: any) => {
+  /**
+   * World-space velocity sample — a plain expression builder, NOT a shared TSL Fn:
+   * every call site gets fresh nodes. (Sharing one Fn across many pipelines left some
+   * of them silently sampling zeros — same class of bug the ocean port hit.)
+   */
+  readonly velAt = (pw: any): any => {
     const p = pw.add(this.uHalf).toVar();
     return vec3(this.sampleU(p), this.sampleV(p), this.sampleW(p));
-  });
+  };
 
   /**
    * Splat a velocity impulse (Δv, already scaled) trilinearly onto the faces around a
    * world-space point. Accumulated in fixed-point atomics, applied next `apply` pass.
+   * Plain expression builder for the same reason as `velAt`.
    */
-  readonly splatImpulse: any = Fn(([pw, dv]: any) => {
+  readonly splatImpulse = (pw: any, dv: any): void => {
     const p = pw.add(this.uHalf).toVar();
     this.splatAxis(p, dv.x, this.iu, nx + 1, ny, nz, 0, 0.5, 0.5);
     this.splatAxis(p, dv.y, this.iv, nx, ny + 1, nz, 0.5, 0, 0.5);
     this.splatAxis(p, dv.z, this.iw, nx, ny, nz + 1, 0.5, 0.5, 0);
-  });
+  };
 
   private kApplyU: any; private kApplyV: any; private kApplyW: any;
   private kProj: any[] = [];
@@ -197,7 +202,7 @@ export class Fluid {
   }
 
   private makeSampler(buf: any, dimX: number, dimY: number, dimZ: number, ox: number, oy: number, oz: number): any {
-    return Fn(([p]: any) => {
+    return (p: any) => {
       const gx = clamp(p.x.div(h).sub(ox), 0, dimX - 1.0001).toVar();
       const gy = clamp(p.y.div(h).sub(oy), 0, dimY - 1.0001).toVar();
       const gz = clamp(p.z.div(h).sub(oz), 0, dimZ - 1.0001).toVar();
@@ -215,7 +220,7 @@ export class Fluid {
       const y0 = x00.mul(fy.oneMinus()).add(x10.mul(fy));
       const y1 = x01.mul(fy.oneMinus()).add(x11.mul(fy));
       return y0.mul(fz.oneMinus()).add(y1.mul(fz));
-    });
+    };
   }
 
   /** trilinear fixed-point atomic scatter of one Δv component onto one face grid */

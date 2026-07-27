@@ -43,7 +43,7 @@ export class Jellyfish {
   readonly uWave = uniform(J.muscle.wave);
   readonly uAlphaBell = uniform(0.1);   // per-frame fluid-grip fraction (bell)
   readonly uAlphaTent = uniform(0.05);
-  readonly uMomBell = uniform(0.45);    // node↔cell water-mass ratio for splat-back
+  readonly uMomBell = uniform(0.65);    // node↔cell water-mass ratio for splat-back
   readonly uMomTent = uniform(0.08);
   readonly uDtSub = uniform(1 / 480);
   readonly uDtFrame = uniform(1 / 60);

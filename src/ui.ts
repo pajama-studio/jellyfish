@@ -2,9 +2,10 @@
 import { CONF } from "./config";
 import type { Jellyfish } from "./sim/jellyfish";
 import type { Plankton } from "./sim/particles";
+import type { FlowField } from "./render/flowfield";
 import type { Bell } from "./render/bell";
 
-export function wireUI(jelly: Jellyfish, plankton: Plankton, bell: Bell) {
+export function wireUI(jelly: Jellyfish, plankton: Plankton, flow: FlowField, bell: Bell) {
   const $ = (id: string) => document.getElementById(id) as HTMLInputElement | null;
 
   const gear = document.getElementById("gear");
@@ -32,7 +33,14 @@ export function wireUI(jelly: Jellyfish, plankton: Plankton, bell: Bell) {
     glow.addEventListener("input", () => (plankton.uGlow.value = Number(glow.value)));
   }
   const flowChk = $("uiFlow");
-  flowChk?.addEventListener("change", () => (plankton.uFlowViz.value = flowChk.checked ? 1 : 0));
+  if (flowChk) {
+    const apply = () => {
+      flow.visible = flowChk.checked;
+      plankton.uFlowViz.value = flowChk.checked ? 1 : 0;
+    };
+    flowChk.addEventListener("change", apply);
+    apply();
+  }
   const muscleChk = $("uiMuscle");
   muscleChk?.addEventListener("change", () => (bell.uMuscleVis.value = muscleChk.checked ? 0.9 : 0));
 }

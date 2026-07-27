@@ -11,6 +11,7 @@ import { Plankton } from "./sim/particles";
 import { Bell } from "./render/bell";
 import { Tentacles } from "./render/tentacles";
 import { Environment } from "./render/environment";
+import { FlowField } from "./render/flowfield";
 import { Post } from "./render/post";
 import { wireUI } from "./ui";
 
@@ -57,10 +58,11 @@ async function boot() {
   const bell = new Bell(jelly);
   const tentacles = new Tentacles(jelly);
   const env = new Environment();
-  scene.add(env.group, plankton.mesh, tentacles.mesh, bell.mesh);
+  const flow = new FlowField(renderer, fluid);
+  scene.add(env.group, plankton.mesh, flow.mesh, tentacles.mesh, bell.mesh);
   const post = new Post(renderer, scene, camera);
 
-  wireUI(jelly, plankton, bell);
+  wireUI(jelly, plankton, flow, bell);
 
   // click (not drag) → eager stroke
   let downAt = 0, downX = 0, downY = 0;
@@ -96,6 +98,7 @@ async function boot() {
     shash.build();
     fluid.update(dt);
     plankton.update(dt, camera);
+    flow.update();
 
     // render
     env.update(t);

@@ -14,13 +14,13 @@ export const CONF = {
   fluid: {
     projectIters: LOW ? 10 : 14, // red-black SOR sweeps
     overRelax: 1.7,
-    damping: 0.12,      // per-second velocity decay (open-water energy loss)
+    damping: 0.06,      // per-second velocity decay (open-water energy loss)
     dt: 1 / 60,         // fixed fluid step, decoupled from render dt
     // recentring counter-current: OFF inside the dead zone (so real swimming is visible),
     // then ramps up — the jelly can genuinely rise ~a body length before the "current"
     // starts carrying the world past it.
-    treadmillGain: 1.6,
-    treadmillDeadZone: 1.0,
+    treadmillGain: 1.0,
+    treadmillDeadZone: 1.4,
     treadmillMax: 0.6,
   },
 
@@ -37,15 +37,15 @@ export const CONF = {
     kShear: 900,
     kThick: 2600,       // cross-shell springs (bending stiffness of the two-layer shell)
     kMuscleBase: 2200,  // circumferential muscle springs (subumbrellar shell)
-    kDamp: 14,          // spring damping (along spring axis)
-    globalDamp: 0.9,    // per-second viscous damping on node velocity
+    kDamp: 10,          // spring damping (along spring axis)
+    globalDamp: 0.45,   // per-second viscous damping on node velocity
     substeps: 8,        // spring substeps per frame
-    sink: 0.1,          // gravity minus buoyancy (net slow sink when idle)
-    drag: 16.0,         // fluid↔body momentum-exchange coefficient (bell)
+    sink: 0.055,        // gravity minus buoyancy (net slow sink when idle)
+    drag: 26.0,         // fluid↔body momentum-exchange coefficient (bell)
     dragTentacle: 3.0,
     muscle: {
-      freq: 0.72,       // Hz — near the resonant gait of a real medusa (paper §3.3)
-      contract: 0.42,   // max rest-length reduction of muscle springs (paper: down to 0.56×)
+      freq: 0.8,        // Hz — near the resonant gait of a real medusa (paper §3.3)
+      contract: 0.48,   // max rest-length reduction of muscle springs (paper: down to 0.56×)
       wave: 0.22,       // phase lag apex→margin (contraction wave travel)
       attack: 0.2,      // fraction of the cycle spent contracting (fast in, slow out)
     },
