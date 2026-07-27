@@ -12,7 +12,7 @@ import { bellTexture, causticTexture } from "./textures";
 
 const {
   attribute, uniform, float, int, vec2, vec3, varying, normalize, abs, sin, pow,
-  smoothstep, clamp, positionWorld, cameraPosition, atan, mx_noise_float,
+  smoothstep, mix, clamp, positionWorld, cameraPosition, atan, mx_noise_float,
   fract, select, texture, max, reflect, dot,
 } = TSL as unknown as Record<string, any>;
 
@@ -117,10 +117,15 @@ export class Bell {
       .add(texture(causTex, causUv1).r.mul(0.35)).mul(diff);
 
     const spec = pow(max(dot(reflect(L.negate(), Nw), V.negate()), 0), 30).mul(0.6);
-    const rimCol = vec3(0.5, 0.95, 1.0);
+    // iridescent thin-film rim: hue slides cyan → violet → magenta with grazing angle,
+    // so the edge shimmers through colours as the bell flexes or the camera moves
+    const tGraze = pow(facing.oneMinus(), 1.1);
+    const iri = mix(
+      mix(vec3(0.3, 0.95, 1.0), vec3(0.6, 0.55, 1.0), smoothstep(0.15, 0.55, tGraze)),
+      vec3(1.0, 0.45, 0.85), smoothstep(0.55, 0.92, tGraze));
 
     let col = colorMap.rgb.mul(diff.mul(0.62).add(caus.mul(0.7)).add(0.16));
-    col = col.add(rimCol.mul(fres).mul(0.55));
+    col = col.add(iri.mul(fres).mul(0.6));
     col = col.add(vec3(0.9, 0.97, 1.0).mul(spec).mul(0.5));
 
     // ---- bioluminescence ----
@@ -162,11 +167,31 @@ export class Bell {
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 10;
+
+    // living core: a soft light in the bell's heart that flares with each stroke
+    const coreMat = new MeshBasicNodeMaterial();
+    coreMat.transparent = true;
+    coreMat.depthWrite = false;
+    coreMat.blending = THREE.AdditiveBlending;
+    coreMat.side = THREE.DoubleSide;
+    const cu = (TSL as unknown as Record<string, any>).uv();
+    const cd = cu.sub(0.5).length();
+    coreMat.colorNode = mix(vec3(1.0, 0.75, 0.95), vec3(0.45, 0.3, 0.75), smoothstep(0.0, 0.5, cd));
+    coreMat.opacityNode = smoothstep(0.5, 0.03, cd).pow(2.0).mul(this.uAct.mul(0.4).add(0.16));
+    this.core = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 1.15), coreMat);
+    this.core.renderOrder = 8;
+    this.core.frustumCulled = false;
   }
 
-  update(t: number, act: number, center: THREE.Vector3) {
+  readonly core: THREE.Mesh;
+
+  update(t: number, act: number, center: THREE.Vector3, camera?: THREE.Camera) {
     this.uTime.value = t;
     this.uAct.value = act;
     this.uCenter.value.lerp(center, 0.05);
+    if (camera) {
+      this.core.position.set(this.uCenter.value.x, this.uCenter.value.y + 0.02, this.uCenter.value.z);
+      this.core.lookAt(camera.position);
+    }
   }
 }

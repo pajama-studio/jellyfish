@@ -61,7 +61,7 @@ async function boot() {
   const env = new Environment();
   const flow = new FlowField(renderer, fluid);
   const trails = new Trails(renderer, fluid);
-  scene.add(env.group, plankton.mesh, trails.mesh, flow.mesh, tentacles.mesh, bell.mesh);
+  scene.add(env.group, plankton.mesh, trails.mesh, flow.mesh, tentacles.mesh, bell.core, bell.mesh);
   const post = new Post(renderer, scene, camera);
 
   wireUI(jelly, plankton, flow, bell);
@@ -105,8 +105,14 @@ async function boot() {
 
     // render
     env.update(t, camera);
-    bell.update(t, jelly.actVis, centroid);
+    bell.update(t, jelly.actVis, centroid, camera);
     tentacles.update(t);
+    // slow breathing drift — the camera never sits perfectly still underwater
+    controls.target.set(
+      Math.sin(t * 0.11) * 0.05,
+      0.1 + Math.sin(t * 0.073) * 0.045,
+      Math.cos(t * 0.09) * 0.05,
+    );
     controls.update();
     void post.render();
 

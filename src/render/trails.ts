@@ -120,7 +120,7 @@ export class Trails {
     const view = normalize(cameraPosition.sub(p)).toVar();
     const ribbonDir = normalize(cross(tang, view).add(vec3(1e-5, 1e-5, 0))).toVar();
     const age = float(seg).div(HIST - 1);
-    const width = float(0.011).mul(age.mul(0.85).oneMinus());
+    const width = float(0.008).mul(age.mul(0.85).oneMinus());
     mat.positionNode = p.add(ribbonDir.mul(side.mul(width)));
 
     const vAge = varying(age);
@@ -128,7 +128,7 @@ export class Trails {
     const slow = vec3(0.2, 0.5, 1.0);
     const fastC = vec3(0.6, 1.0, 0.95); // aurora mint-cyan
     mat.colorNode = mix(slow, fastC, smoothstep(0.06, 0.7, vSp)).mul(vAge.mul(0.55).oneMinus());
-    mat.opacityNode = vAge.oneMinus().pow(2).mul(smoothstep(0.025, 0.25, vSp)).mul(0.5);
+    mat.opacityNode = vAge.oneMinus().pow(2).mul(smoothstep(0.025, 0.25, vSp)).mul(0.42);
 
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.frustumCulled = false;
