@@ -1,0 +1,19 @@
+- generic [active] [ref=f4e1]:
+  - generic:
+    - heading "jellyfish" [level=1]
+    - paragraph:
+      - text: a soft body swimming in a live 3D fluid, on your GPU ·
+      - link "pajama studio" [ref=f4e3] [cursor=pointer]:
+        - /url: https://pajama.studio
+  - generic: 60 fps
+  - generic "tuning" [ref=f4e4] [cursor=pointer]: ☼
+  - generic: drag to orbit · scroll to zoom · click the water to pulse
+  - generic:
+    - link "open source" [ref=f4e5] [cursor=pointer]:
+      - /url: https://github.com/pajama-studio/jellyfish
+    - text: · after
+    - link "Rudolf & Mould 2009" [ref=f4e6] [cursor=pointer]:
+      - /url: https://gigl.scs.carleton.ca/node/114
+    - text: "&"
+    - link "Ten Minute Physics" [ref=f4e7] [cursor=pointer]:
+      - /url: https://matthias-research.github.io/pages/tenMinutePhysics/

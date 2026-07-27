@@ -15,13 +15,11 @@ export const CONF = {
     projectIters: LOW ? 10 : 14, // red-black SOR sweeps
     overRelax: 1.7,
     damping: 0.06,      // per-second velocity decay (open-water energy loss)
+    vorticity: 0.3,     // vorticity confinement ε (GPU-Gems scale, F = ε·h·N̂×ω) — keep ≲0.5 or it explodes
     dt: 1 / 60,         // fixed fluid step, decoupled from render dt
-    // recentring counter-current: OFF inside the dead zone (so real swimming is visible),
-    // then ramps up — the jelly can genuinely rise ~a body length before the "current"
-    // starts carrying the world past it.
-    treadmillGain: 1.0,
-    treadmillDeadZone: 1.4,
-    treadmillMax: 0.6,
+    // station-keeping: the WORLD is shifted toward the origin with this time constant
+    // (all positions, GPU-side) — the water never carries a fake counter-current.
+    recenterTau: 3.0,
   },
 
   // ---- jellyfish soft body (Rudolf & Mould 2009, taken to true 3D) ----
@@ -48,7 +46,7 @@ export const CONF = {
     // Sub-grid jet model: the coarse fluid grid under-resolves the expelled jet's
     // momentum flux (the paper's IBM transfers it via pressure; drag coupling can't).
     // Reaction accel = jetK × d(activation)/dt during the power stroke.
-    jetK: 0.32,
+    jetK: 0.12,
     dragTentacle: 3.0,
     muscle: {
       freq: 0.8,        // Hz — near the resonant gait of a real medusa (paper §3.3)

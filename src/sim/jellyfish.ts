@@ -48,6 +48,7 @@ export class Jellyfish {
   readonly uDtSub = uniform(1 / 480);
   readonly uDtFrame = uniform(1 / 60);
   readonly uJet = uniform(0); // sub-grid jet reaction accel (see config jetK)
+  readonly uShiftK = uniform(0); // world-shift recentring fraction per frame
   readonly uK = uniform(new THREE.Vector4(J.kStruct, J.kShear, J.kThick, J.kMuscleBase));
 
   /** current margin activation 0..1 (CPU mirror, for render ripples) */
@@ -58,6 +59,7 @@ export class Jellyfish {
   pulse = 0; // click boost, decays
 
   private kForce: any; private kIntegrate: any; private kCouple: any; private kNormals: any; private kTent: any; private kCentroid: any;
+  private kShiftB: any; private kShiftT: any;
 
   constructor(private renderer: THREE.WebGPURenderer, private fluid: Fluid) {
     // ================= CPU construction =================
@@ -313,6 +315,19 @@ export class Jellyfish {
         fluid.centBuf.element(int(0)).assign(acc.div(64).toVec4());
       });
     })().compute(1);
+
+    // world-shift station-keeping: nudge every position toward the origin (τ≈3 s).
+    // The velocity field is position-independent, so the wake stays aligned; unlike a
+    // counter-current, the water itself never carries a fake global flow.
+    this.kShiftB = Fn(() => {
+      const sh = fluid.centBuf.element(int(0)).xyz.mul(this.uShiftK);
+      this.pos.element(instanceIndex).subAssign(sh);
+    })().compute(NBELL);
+    this.kShiftT = Fn(() => {
+      const sh = fluid.centBuf.element(int(0)).xyz.mul(this.uShiftK);
+      this.tPos.element(instanceIndex).subAssign(sh);
+      this.tPrev.element(instanceIndex).subAssign(sh);
+    })().compute(NTENT);
   }
 
   /** advance one frame: muscle phase, springs (substepped), tentacles, coupling, normals */
@@ -345,6 +360,9 @@ export class Jellyfish {
     r.compute(this.kTent as never);
     r.compute(this.kNormals as never);
     r.compute(this.kCentroid as never);
+    this.uShiftK.value = 1 - Math.exp(-d / CONF.fluid.recenterTau);
+    r.compute(this.kShiftB as never);
+    r.compute(this.kShiftT as never);
   }
 
   userContract: number = CONF.jelly.muscle.contract;

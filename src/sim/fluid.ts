@@ -11,9 +11,12 @@ import { CONF, FIXED } from "../config";
 
 // TSL's strict generics fight expression-style compute code; treat node math as untyped.
 const {
-  Fn, instancedArray, instanceIndex, uniform, float, int, vec3, If,
+  Fn, instancedArray, instanceIndex, uniform, float, int, vec3, vec4, If,
   clamp, floor, atomicAdd, atomicLoad, atomicStore, select, min,
 } = TSL as unknown as Record<string, any>;
+
+// int helpers (min is float-flavoured in some TSL overloads; keep int math explicit)
+const max2 = (a: any, b: any) => select(a.greaterThan(b), a, b);
 
 const { nx, ny, nz, h } = CONF.grid;
 const NU = (nx + 1) * ny * nz;
@@ -40,10 +43,12 @@ export class Fluid {
   readonly iu = instancedArray(NU, "int").setPBO(true).toAtomic();
   readonly iv = instancedArray(NV, "int").setPBO(true).toAtomic();
   readonly iw = instancedArray(NW, "int").setPBO(true).toAtomic();
+  // vorticity confinement (Fedkiw): ω + |ω| per cell, then the confinement force per cell
+  readonly vort = instancedArray(NCELL, "vec4");
+  readonly vortF = instancedArray(NCELL, "vec4");
 
   readonly uDt = uniform(CONF.fluid.dt);
   readonly uDampF = uniform(1); // per-frame damping factor, set from dt
-  readonly uTreadK = uniform(0); // per-frame recentring gain (Δv per unit offset)
   /** jelly centroid, written by the jellyfish's reduction kernel (GPU-only — no readback) */
   readonly centBuf = instancedArray(1, "vec4");
   readonly uHalf = uniform(new THREE.Vector3(nx * h * 0.5, ny * h * 0.5, nz * h * 0.5));
@@ -86,47 +91,107 @@ export class Fluid {
   private kProj: any[] = [];
   private kAdvU: any; private kAdvV: any; private kAdvW: any;
   private kCopyU: any; private kCopyV: any; private kCopyW: any;
+  private kVort: any; private kVortF: any;
+  readonly uVortEps = uniform(0);
 
   constructor(private renderer: THREE.WebGPURenderer) {
     const damp = () => this.uDampF;
-    // recentring "treadmill" current, GPU-side (reads the centroid buffer — no readback).
-    // Dead zone: no interference near the origin, so genuine swimming stays visible;
-    // beyond it a counter-current ramps up and carries the water column past the jelly.
-    const tread = (axis: "x" | "y" | "z", scale: number) => {
-      const c = this.centBuf.element(int(0))[axis];
-      const dz = float(CONF.fluid.treadmillDeadZone).mul(scale === 1 ? 1 : 0.7);
-      const excess = c.sign().mul(c.abs().sub(dz).max(0));
-      return clamp(excess.negate().mul(this.uTreadK).mul(scale),
-        float(CONF.fluid.treadmillMax).negate(), float(CONF.fluid.treadmillMax));
-    };
+    // Station-keeping now happens by WORLD-SHIFT (every system subtracts a small
+    // centroid-proportional offset each frame) — no counter-current in the water at
+    // all, so the velocity field only ever contains the jelly's genuine wake.
 
-    // ---- 1. apply accumulated body impulses + damping + recentring current ----
+    // ---- 0. vorticity confinement (Fedkiw et al.): the coarse grid + semi-Lagrangian
+    // advection diffuse rotational motion away; measure ω = ∇×u per cell, then push
+    // toward vorticity maxima — vortex rings behind the bell stay crisp and alive.
+    const cellVel = (i: N, j: N, k: N) => vec3(
+      this.u.element(uIdx(i, j, k)).add(this.u.element(uIdx(i.add(1), j, k))).mul(0.5),
+      this.v.element(vIdx(i, j, k)).add(this.v.element(vIdx(i, j.add(1), k))).mul(0.5),
+      this.w.element(wIdx(i, j, k)).add(this.w.element(wIdx(i, j, k.add(1)))).mul(0.5),
+    );
+    this.kVort = Fn(() => {
+      const id = int(instanceIndex);
+      const i = id.mod(int(nx));
+      const j = id.div(int(nx)).mod(int(ny));
+      const k = id.div(int(nx * ny));
+      const interior = i.greaterThan(int(0)).and(i.lessThan(int(nx - 1)))
+        .and(j.greaterThan(int(0))).and(j.lessThan(int(ny - 1)))
+        .and(k.greaterThan(int(0))).and(k.lessThan(int(nz - 1)));
+      If(interior, () => {
+        const inv2h = 1 / (2 * h);
+        const vjp = cellVel(i, j.add(1), k).toVar(); const vjm = cellVel(i, j.sub(1), k).toVar();
+        const vkp = cellVel(i, j, k.add(1)).toVar(); const vkm = cellVel(i, j, k.sub(1)).toVar();
+        const vip = cellVel(i.add(1), j, k).toVar(); const vim = cellVel(i.sub(1), j, k).toVar();
+        const wx = vjp.z.sub(vjm.z).mul(inv2h).sub(vkp.y.sub(vkm.y).mul(inv2h));
+        const wy = vkp.x.sub(vkm.x).mul(inv2h).sub(vip.z.sub(vim.z).mul(inv2h));
+        const wz = vip.y.sub(vim.y).mul(inv2h).sub(vjp.x.sub(vjm.x).mul(inv2h));
+        const om = vec3(wx, wy, wz).toVar();
+        this.vort.element(instanceIndex).assign(vec4(om, om.length()));
+      }).Else(() => {
+        this.vort.element(instanceIndex).assign(vec4(0, 0, 0, 0));
+      });
+    })().compute(NCELL);
+
+    const cid = (i: N, j: N, k: N) => i.add(int(nx).mul(j.add(int(ny).mul(k))));
+    this.kVortF = Fn(() => {
+      const id = int(instanceIndex);
+      const i = id.mod(int(nx));
+      const j = id.div(int(nx)).mod(int(ny));
+      const k = id.div(int(nx * ny));
+      const interior = i.greaterThan(int(0)).and(i.lessThan(int(nx - 1)))
+        .and(j.greaterThan(int(0))).and(j.lessThan(int(ny - 1)))
+        .and(k.greaterThan(int(0))).and(k.lessThan(int(nz - 1)));
+      If(interior, () => {
+        const gx = this.vort.element(cid(i.add(1), j, k)).w.sub(this.vort.element(cid(i.sub(1), j, k)).w);
+        const gy = this.vort.element(cid(i, j.add(1), k)).w.sub(this.vort.element(cid(i, j.sub(1), k)).w);
+        const gz = this.vort.element(cid(i, j, k.add(1))).w.sub(this.vort.element(cid(i, j, k.sub(1))).w);
+        const eta = vec3(gx, gy, gz).toVar();
+        const N3 = eta.div(eta.length().add(1e-5)).toVar();
+        const om = this.vort.element(instanceIndex).xyz;
+        this.vortF.element(instanceIndex).assign(vec4(N3.cross(om).mul(this.uVortEps), 0));
+      }).Else(() => {
+        this.vortF.element(instanceIndex).assign(vec4(0, 0, 0, 0));
+      });
+    })().compute(NCELL);
+
+    // ---- 1. apply accumulated body impulses + vorticity + damping + recentring ----
     this.kApplyU = Fn(() => {
       const id = int(instanceIndex);
       const i = id.mod(int(nx + 1));
+      const j = id.div(int(nx + 1)).mod(int(ny));
+      const k = id.div(int((nx + 1) * ny));
       const imp = float(atomicLoad(this.iu.element(instanceIndex))).div(FIXED);
       atomicStore(this.iu.element(instanceIndex), int(0));
-      const val = this.u.element(instanceIndex).add(imp).add(tread("x", 0.4)).mul(damp());
+      const iL = max2(i.sub(1), int(0)); const iR = min(i, int(nx - 1));
+      const vf = clamp(this.vortF.element(cid(iL, j, k)).x.add(this.vortF.element(cid(iR, j, k)).x).mul(0.5), -0.08, 0.08);
+      const val = this.u.element(instanceIndex).add(imp).add(vf).mul(damp());
       const wall = i.equal(0).or(i.equal(int(nx)));
       this.u.element(instanceIndex).assign(select(wall, float(0), clamp(val, this.uVMax.negate(), this.uVMax)));
     })().compute(NU);
 
     this.kApplyV = Fn(() => {
       const id = int(instanceIndex);
+      const i = id.mod(int(nx));
       const j = id.div(int(nx)).mod(int(ny + 1));
+      const k = id.div(int(nx * (ny + 1)));
       const imp = float(atomicLoad(this.iv.element(instanceIndex))).div(FIXED);
       atomicStore(this.iv.element(instanceIndex), int(0));
-      const val = this.v.element(instanceIndex).add(imp).add(tread("y", 1)).mul(damp());
+      const jL = max2(j.sub(1), int(0)); const jR = min(j, int(ny - 1));
+      const vf = clamp(this.vortF.element(cid(i, jL, k)).y.add(this.vortF.element(cid(i, jR, k)).y).mul(0.5), -0.08, 0.08);
+      const val = this.v.element(instanceIndex).add(imp).add(vf).mul(damp());
       const wall = j.equal(0).or(j.equal(int(ny)));
       this.v.element(instanceIndex).assign(select(wall, float(0), clamp(val, this.uVMax.negate(), this.uVMax)));
     })().compute(NV);
 
     this.kApplyW = Fn(() => {
       const id = int(instanceIndex);
+      const i = id.mod(int(nx));
+      const j = id.div(int(nx)).mod(int(ny));
       const k = id.div(int(nx * ny));
       const imp = float(atomicLoad(this.iw.element(instanceIndex))).div(FIXED);
       atomicStore(this.iw.element(instanceIndex), int(0));
-      const val = this.w.element(instanceIndex).add(imp).add(tread("z", 0.4)).mul(damp());
+      const kL = max2(k.sub(1), int(0)); const kR = min(k, int(nz - 1));
+      const vf = clamp(this.vortF.element(cid(i, j, kL)).z.add(this.vortF.element(cid(i, j, kR)).z).mul(0.5), -0.08, 0.08);
+      const val = this.w.element(instanceIndex).add(imp).add(vf).mul(damp());
       const wall = k.equal(0).or(k.equal(int(nz)));
       this.w.element(instanceIndex).assign(select(wall, float(0), clamp(val, this.uVMax.negate(), this.uVMax)));
     })().compute(NW);
@@ -255,8 +320,9 @@ export class Fluid {
   update(dt: number) {
     this.uDt.value = Math.min(dt, CONF.fluid.dt * 2);
     this.uDampF.value = Math.exp(-CONF.fluid.damping * this.uDt.value);
-    this.uTreadK.value = CONF.fluid.treadmillGain * this.uDt.value;
+    this.uVortEps.value = CONF.fluid.vorticity * h * this.uDt.value;
     const r = this.renderer;
+    r.compute(this.kVort as never); r.compute(this.kVortF as never);
     r.compute(this.kApplyU as never); r.compute(this.kApplyV as never); r.compute(this.kApplyW as never);
     for (let it = 0; it < CONF.fluid.projectIters; it++) {
       r.compute(this.kProj[0] as never);

@@ -18,12 +18,14 @@ const N = CONF.particles.count;
 export class Plankton {
   readonly mesh: THREE.InstancedMesh;
   readonly uGlow = uniform(1);
+  readonly uT = uniform(0);
   /** "show currents" mode: streaks lengthen & brighten with flow speed (0 or 1) */
   readonly uFlowViz = uniform(0);
   private uCamRight = uniform(new THREE.Vector3(1, 0, 0));
   private uCamUp = uniform(new THREE.Vector3(0, 1, 0));
   private uDt = uniform(1 / 60);
-  private kInit; private kUpdate;
+  private kInit: any; private kUpdate: any; private kShift: any;
+  readonly uShiftK = uniform(0);
   private inited = false;
 
   constructor(private renderer: THREE.WebGPURenderer, fluid: Fluid, shash: SpatialHash) {
@@ -44,6 +46,11 @@ export class Plankton {
       const rz = hash(fi.mul(0.00931).add(3.1)).sub(0.5).mul(ext.z * 0.96);
       pPos.element(i).assign(vec3(rx, ry, rz));
       pVelGlow.element(i).assign(vec4(0, 0, 0, 0));
+    })().compute(N);
+
+    this.kShift = Fn(() => {
+      const sh = fluid.centBuf.element(0).xyz.mul(this.uShiftK);
+      pPos.element(instanceIndex).subAssign(sh);
     })().compute(N);
 
     this.kUpdate = Fn(() => {
@@ -121,7 +128,10 @@ export class Plankton {
     // currents mode: fast water tints toward hot white so the jet reads instantly
     const speedTint = mix(vec3(0.25, 0.6, 1.0), vec3(1.0, 1.0, 0.92), smoothstep(0.06, 0.7, vSp));
     mat.colorNode = mix(baseCol, speedTint, this.uFlowViz);
-    const twinkle = hash(fi.mul(2.71)).mul(0.5).add(0.5);
+    // slow breathing twinkle, phase-scattered per mote
+    const sin_ = (TSL as unknown as Record<string, any>).sin;
+    const twinkle = sin_(this.uT.mul(hash(fi.add(9.1)).mul(1.4).add(0.5)).add(hash(fi.mul(3.7)).mul(6.28)))
+      .mul(0.3).add(0.7);
     mat.opacityNode = DBG
       ? dot.mul(0.5)
       : dot.mul(vGlow.mul(0.85).add(0.10)).mul(twinkle)
@@ -136,9 +146,12 @@ export class Plankton {
   update(dt: number, camera: THREE.Camera) {
     if (!this.inited) { this.renderer.compute(this.kInit as never); this.inited = true; }
     this.uDt.value = Math.min(dt, 1 / 30);
+    this.uT.value += dt;
     const m = camera.matrixWorld.elements;
     this.uCamRight.value.set(m[0], m[1], m[2]);
     this.uCamUp.value.set(m[4], m[5], m[6]);
+    this.uShiftK.value = 1 - Math.exp(-this.uDt.value / CONF.fluid.recenterTau);
+    this.renderer.compute(this.kShift as never);
     this.renderer.compute(this.kUpdate as never);
   }
 }

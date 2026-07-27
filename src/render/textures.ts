@@ -61,6 +61,23 @@ export function bellTexture(): THREE.CanvasTexture {
   g.fillStyle = apex;
   g.fillRect(0, 0, W, H * 0.3);
 
+  // four horseshoe gonads around the apex (the sea-nettle / moon-jelly signature)
+  for (let q = 0; q < 4; q++) {
+    const cx = ((q + 0.5) / 4) * W;
+    const cy = H * 0.16;
+    g.strokeStyle = "rgba(190,90,60,0.4)";
+    g.lineWidth = 16;
+    g.lineCap = "round";
+    g.beginPath();
+    g.arc(cx, cy, 34, Math.PI * 0.15, Math.PI * 1.6);
+    g.stroke();
+    g.strokeStyle = "rgba(230,140,100,0.28)";
+    g.lineWidth = 8;
+    g.beginPath();
+    g.arc(cx, cy, 34, Math.PI * 0.2, Math.PI * 1.5);
+    g.stroke();
+  }
+
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;

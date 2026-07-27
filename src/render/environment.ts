@@ -37,12 +37,12 @@ export class Environment {
     const band = abs(sin(u.x.mul(9.0).add(this.uTime.mul(0.13)))).pow(3.0);
     const vFade = smoothstep(0.0, 0.45, u.y).mul(smoothstep(1.0, 0.6, u.y));
     const hFade = smoothstep(0.0, 0.2, u.x).mul(smoothstep(1.0, 0.8, u.x));
-    shaftMat.colorNode = vec3(0.35, 0.6, 0.75);
-    shaftMat.opacityNode = band.mul(vFade).mul(hFade).mul(0.05);
-    for (let i = 0; i < 3; i++) {
-      const plane = new THREE.Mesh(new THREE.PlaneGeometry(26, 22), shaftMat);
+    shaftMat.colorNode = vec3(0.5, 0.62, 0.66);
+    shaftMat.opacityNode = band.mul(vFade).mul(hFade).mul(0.07);
+    for (let i = 0; i < 5; i++) {
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(26, 24), shaftMat);
       plane.position.set(0, 12, 0);
-      plane.rotation.y = (i / 3) * Math.PI;
+      plane.rotation.y = (i / 5) * Math.PI;
       plane.renderOrder = -5;
       plane.frustumCulled = false;
       this.shafts.add(plane);

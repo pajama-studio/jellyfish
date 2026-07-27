@@ -24,7 +24,7 @@ export class Bell {
   readonly uTime = uniform(0);
   readonly uAct = uniform(0);          // current margin muscle activation (CPU mirror)
   readonly uCenter = uniform(new THREE.Vector3());
-  readonly uMuscleVis = uniform(0.9);  // muscle-layer visibility (panel toggle)
+  readonly uMuscleVis = uniform(0.55); // muscle-layer visibility (panel toggle)
 
   constructor(jelly: Jellyfish) {
     // ---- static index/attribute construction (positions live on the GPU) ----
@@ -104,11 +104,17 @@ export class Bell {
     // warm light from above + painted caustic web scrolled in world space
     const L = normalize(vec3(0.25, 1.0, 0.15));
     const diff = max(dot(Nw, L), 0).toVar();
-    const causUv = vec2(
-      positionWorld.x.mul(0.42).add(this.uTime.mul(0.015)),
-      positionWorld.z.sub(positionWorld.y).mul(0.21).add(this.uTime.mul(0.007)),
+    // dual counter-scrolling caustic layers → shimmering interference, the classic trick
+    const causUv1 = vec2(
+      positionWorld.x.mul(0.42).add(this.uTime.mul(0.021)),
+      positionWorld.z.sub(positionWorld.y).mul(0.21).add(this.uTime.mul(0.009)),
     );
-    const caus = texture(causTex, causUv).r.mul(diff).mul(1.6);
+    const causUv2 = vec2(
+      positionWorld.x.mul(0.31).sub(this.uTime.mul(0.014)),
+      positionWorld.z.sub(positionWorld.y).mul(0.17).sub(this.uTime.mul(0.006)),
+    );
+    const caus = texture(causTex, causUv1).r.mul(texture(causTex, causUv2).r).mul(4.0)
+      .add(texture(causTex, causUv1).r.mul(0.35)).mul(diff);
 
     const spec = pow(max(dot(reflect(L.negate(), Nw), V.negate()), 0), 30).mul(0.6);
     const rimCol = vec3(0.65, 0.85, 1.0);

@@ -47,5 +47,5 @@ export function wireUI(jelly: Jellyfish, plankton: Plankton, flow: FlowField, be
     apply();
   }
   const muscleChk = $("uiMuscle");
-  muscleChk?.addEventListener("change", () => (bell.uMuscleVis.value = muscleChk.checked ? 0.9 : 0));
+  muscleChk?.addEventListener("change", () => (bell.uMuscleVis.value = muscleChk.checked ? 0.55 : 0));
 }
