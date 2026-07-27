@@ -104,7 +104,7 @@ async function boot() {
     flow.update();
 
     // render
-    env.update(t);
+    env.update(t, camera);
     bell.update(t, jelly.actVis, centroid);
     tentacles.update(t);
     controls.update();

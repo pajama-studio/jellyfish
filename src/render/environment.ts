@@ -13,6 +13,7 @@ export class Environment {
   private shafts: THREE.Group;
   private cone1?: THREE.Mesh;
   private cone2?: THREE.Mesh;
+  private halo?: THREE.Mesh;
 
   constructor() {
     // gradient dome
@@ -78,6 +79,22 @@ export class Environment {
     };
     this.cone1 = mkCone(1.6, 5.2, 15, 9.5, 0.16, 1);
     this.cone2 = mkCone(2.6, 7.5, 16, 9.0, 0.1, -1);
+
+    // backlight halo — a soft radial glow always BEHIND the jelly along the view
+    // axis. The single biggest trick of aquarium jellyfish photography: the animal
+    // reads as a luminous silhouette floating in front of a distant light.
+    const haloMat = new MeshBasicNodeMaterial();
+    haloMat.transparent = true;
+    haloMat.depthWrite = false;
+    haloMat.blending = THREE.AdditiveBlending;
+    haloMat.side = THREE.DoubleSide;
+    const hd = uv().sub(0.5).length();
+    haloMat.colorNode = mix(vec3(0.1, 0.4, 0.55), vec3(0.03, 0.1, 0.22), smoothstep(0.0, 0.5, hd));
+    haloMat.opacityNode = smoothstep(0.5, 0.02, hd).pow(1.6).mul(0.55);
+    this.halo = new THREE.Mesh(new THREE.PlaneGeometry(7.5, 7.5), haloMat);
+    this.halo.renderOrder = -3;
+    this.halo.frustumCulled = false;
+    this.group.add(this.halo);
     this.group.add(this.shafts);
 
     // warm sun glow far above — gives the amber palette its light source
@@ -99,10 +116,16 @@ export class Environment {
     void float;
   }
 
-  update(t: number) {
+  update(t: number, camera?: THREE.Camera) {
     this.uTime.value = t;
     this.shafts.rotation.y = t * 0.012;
     if (this.cone1) this.cone1.rotation.y = t * 0.05;
     if (this.cone2) this.cone2.rotation.y = -t * 0.033;
+    if (this.halo && camera) {
+      // sit 2.6 units behind the origin as seen from the camera, facing it
+      const dir = camera.position.clone().normalize();
+      this.halo.position.copy(dir.multiplyScalar(-2.6));
+      this.halo.lookAt(camera.position);
+    }
   }
 }

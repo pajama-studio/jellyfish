@@ -153,6 +153,7 @@ export class Jellyfish {
     const tPosA = new Float32Array(NTENT * 3);
     const chainRootA = new Int32Array(TCH);
     const chainSegA = new Float32Array(TCH * 2); // segLen, damp
+    const hashf = (n: number) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x - Math.floor(x); };
     for (let c = 0; c < TCH; c++) {
       const isArm = c >= CONF.tentacles.count;
       const cfg = isArm ? CONF.arms : CONF.tentacles;
@@ -160,7 +161,9 @@ export class Jellyfish {
         ? nIdx(1, 2, Math.round(((c - CONF.tentacles.count) / CONF.arms.count) * S + 4))
         : nIdx(1, R - 1, Math.round((c / CONF.tentacles.count) * S));
       chainRootA[c] = root;
-      const segLen = cfg.length / cfg.segs;
+      // varied tentacle lengths — sparse, unequal threads read far more gracefully
+      const lenScale = isArm ? 0.85 + 0.3 * hashf(c) : 0.45 + 0.9 * hashf(c * 1.7 + 3);
+      const segLen = (cfg.length * lenScale) / cfg.segs;
       chainSegA[c * 2] = segLen;
       chainSegA[c * 2 + 1] = cfg.damp;
       const rp = new THREE.Vector3(posA[root * 3], posA[root * 3 + 1], posA[root * 3 + 2]);

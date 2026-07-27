@@ -26,9 +26,9 @@ export const CONF = {
   jelly: {
     rings: 16,          // meridian resolution (apex → margin)
     segs: 32,           // longitude resolution
-    radius: 0.62,       // bell radius at margin (world units)
-    height: 0.5,        // bell dome height
-    thetaMax: 1.85,     // how far the dome wraps (radians; >π/2 curls past equator)
+    radius: 0.7,        // bell radius at margin (world units)
+    height: 0.46,       // bell dome height — shallow, elegant saucer
+    thetaMax: 1.72,     // how far the dome wraps (radians; >π/2 curls past equator)
     thickness: 0.09,    // mesoglea thickness at apex (paper: ~10% of diameter)
     nodeMass: 1.0,
     kStruct: 2400,      // Hookean spring stiffness (structural)
@@ -57,11 +57,11 @@ export const CONF = {
   },
 
   // ---- trailing anatomy ----
-  tentacles: { count: 26, segs: 24, length: 2.6, damp: 0.985, iters: 10 },
-  arms: { count: 4, segs: 24, length: 2.4, damp: 0.99 },
+  tentacles: { count: 14, segs: 24, length: 2.8, damp: 0.985, iters: 10 },
+  arms: { count: 4, segs: 24, length: 2.9, damp: 0.99 },
 
   // ---- plankton tracer particles (they *are* the flow visualisation) ----
-  particles: { count: LOW ? 16000 : 42000, size: 0.016, drift: 0.015 },
+  particles: { count: LOW ? 16000 : 42000, size: 0.011, drift: 0.015 },
 
   // ---- spatial hash over bell nodes (Ten Minute Physics #11 style) ----
   hash: { size: 16384, bucket: 8, cell: 0.2, pushRadius: 0.1 },

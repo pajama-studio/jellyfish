@@ -41,9 +41,9 @@ export class Plankton {
     this.kInit = Fn(() => {
       const i = instanceIndex;
       const fi = float(i);
-      const rx = hash(fi.mul(0.01711).add(0.13)).sub(0.5).mul(ext.x * 0.96);
-      const ry = hash(fi.mul(0.02313).add(7.7)).sub(0.5).mul(ext.y * 0.96);
-      const rz = hash(fi.mul(0.00931).add(3.1)).sub(0.5).mul(ext.z * 0.96);
+      const rx = hash(fi.mul(1.313).add(0.13)).sub(0.5).mul(ext.x * 0.96);
+      const ry = hash(fi.mul(2.717).add(7.7)).sub(0.5).mul(ext.y * 0.96);
+      const rz = hash(fi.mul(3.531).add(3.1)).sub(0.5).mul(ext.z * 0.96);
       pPos.element(i).assign(vec3(rx, ry, rz));
       pVelGlow.element(i).assign(vec4(0, 0, 0, 0));
     })().compute(N);
@@ -134,7 +134,7 @@ export class Plankton {
       .mul(0.3).add(0.7);
     mat.opacityNode = DBG
       ? dot.mul(0.5)
-      : dot.mul(vGlow.mul(0.85).add(0.10)).mul(twinkle)
+      : dot.mul(vGlow.mul(0.85).add(0.055)).mul(twinkle)
           .div(vStretch.sqrt()).mul(this.uGlow)
           .mul(this.uFlowViz.mul(smoothstep(0.05, 0.4, vSp)).mul(2).add(1));
 
