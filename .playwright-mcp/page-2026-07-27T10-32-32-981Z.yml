@@ -1,0 +1,16 @@
+- generic [active] [ref=f72e1]:
+  - generic: warming the water…
+  - generic:
+    - heading "jellyfish GitHub" [level=1]:
+      - text: jellyfish
+      - link "GitHub" [ref=f72e3] [cursor=pointer]:
+        - /url: https://github.com/rand-monster/jellyfish
+  - generic "tuning" [ref=f72e6] [cursor=pointer]: ☼
+  - generic: drag to orbit · scroll to zoom · click the water to pulse
+  - generic:
+    - text: after
+    - link "Rudolf & Mould 2009" [ref=f72e7] [cursor=pointer]:
+      - /url: https://gigl.scs.carleton.ca/node/114
+    - text: "&"
+    - link "Ten Minute Physics" [ref=f72e8] [cursor=pointer]:
+      - /url: https://matthias-research.github.io/pages/tenMinutePhysics/

@@ -11,7 +11,7 @@ import { NB1 } from "../sim/jellyfish";
 import { bellTexture, causticTexture } from "./textures";
 
 const {
-  attribute, uniform, float, int, vec2, vec3, varying, normalize, abs, sin, pow,
+  attribute, uniform, float, int, vec2, vec3, varying, normalize, cross, abs, sin, pow,
   smoothstep, mix, clamp, positionWorld, cameraPosition, atan, mx_noise_float,
   fract, select, texture, max, reflect, dot,
 } = TSL as unknown as Record<string, any>;
@@ -27,39 +27,54 @@ export class Bell {
   readonly uMuscleVis = uniform(0.55); // muscle-layer visibility (panel toggle)
 
   constructor(jelly: Jellyfish) {
-    // ---- static index/attribute construction (positions live on the GPU) ----
-    const NBELL = NB1 * 2;
-    const aNode = new Float32Array(NBELL);
-    const aRing = new Float32Array(NBELL);
-    const aLayer = new Float32Array(NBELL);
-    const basePos = new Float32Array(NBELL * 3); // for the bounding sphere only
-    for (let i = 0; i < NBELL; i++) {
-      aNode[i] = i;
-      const layer = i >= NB1 ? 1 : 0;
-      const li = i - layer * NB1;
-      aLayer[i] = layer;
-      aRing[i] = li === 0 ? 0 : (Math.floor((li - 1) / S) + 1) / R;
+    // ---- render mesh: 2×-refined grid, positions bicubic-resampled from the sim ----
+    // The paper's own trick (§3.4): simulate coarse, render a cubic-spline resampling.
+    // Each render vertex carries fractional grid coords (aT along the meridian where
+    // integer 0 = apex and k = sim ring k-1; aS around the azimuth) and evaluates a
+    // Catmull-Rom bicubic over the 4×4 neighbouring sim nodes in the vertex stage.
+    const ROWS = 33, COLS = 64;      // (R rings → 2× rows, S segs → 2× columns)
+    const vertsPerLayer = ROWS * COLS;
+    const verts = vertsPerLayer * 2;
+    const aT = new Float32Array(verts);
+    const aS = new Float32Array(verts);
+    const aRing = new Float32Array(verts);
+    const aLayer = new Float32Array(verts);
+    const basePos = new Float32Array(verts * 3); // bounding sphere only
+    const vid = (layer: number, row: number, colIdx: number) =>
+      layer * vertsPerLayer + row * COLS + (((colIdx % COLS) + COLS) % COLS);
+    for (let layer = 0; layer < 2; layer++) {
+      for (let row = 0; row < ROWS; row++) {
+        for (let cIdx = 0; cIdx < COLS; cIdx++) {
+          const i = vid(layer, row, cIdx);
+          aT[i] = (row / (ROWS - 1)) * R;      // 0 = apex … R = margin ring
+          aS[i] = (cIdx / COLS) * S;
+          aRing[i] = row / (ROWS - 1);
+          aLayer[i] = layer;
+        }
+      }
     }
     const idx: number[] = [];
     for (let layer = 0; layer < 2; layer++) {
-      const apex = layer * NB1;
-      for (let s = 0; s < S; s++) idx.push(apex, nId(layer, 0, s), nId(layer, 0, s + 1));
-      for (let r = 0; r < R - 1; r++) for (let s = 0; s < S; s++) {
-        const a2 = nId(layer, r, s), b = nId(layer, r, s + 1), c = nId(layer, r + 1, s + 1), d = nId(layer, r + 1, s);
+      for (let row = 0; row < ROWS - 1; row++) for (let cIdx = 0; cIdx < COLS; cIdx++) {
+        const a2 = vid(layer, row, cIdx), b = vid(layer, row, cIdx + 1),
+          c = vid(layer, row + 1, cIdx + 1), d = vid(layer, row + 1, cIdx);
         idx.push(a2, b, c, a2, c, d);
       }
     }
-    for (let s = 0; s < S; s++) { // margin band joining the two shells
-      const a2 = nId(0, R - 1, s), b = nId(0, R - 1, s + 1), c = nId(1, R - 1, s + 1), d = nId(1, R - 1, s);
+    for (let cIdx = 0; cIdx < COLS; cIdx++) { // margin band joining the two shells
+      const a2 = vid(0, ROWS - 1, cIdx), b = vid(0, ROWS - 1, cIdx + 1),
+        c = vid(1, ROWS - 1, cIdx + 1), d = vid(1, ROWS - 1, cIdx);
       idx.push(a2, b, c, a2, c, d);
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(basePos, 3));
-    geo.setAttribute("aNode", new THREE.BufferAttribute(aNode, 1));
+    geo.setAttribute("aT", new THREE.BufferAttribute(aT, 1));
+    geo.setAttribute("aS", new THREE.BufferAttribute(aS, 1));
     geo.setAttribute("aRing", new THREE.BufferAttribute(aRing, 1));
     geo.setAttribute("aLayer", new THREE.BufferAttribute(aLayer, 1));
     geo.setIndex(idx);
     geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 4);
+    void nId;
 
     // ---- painted textures ----
     const bellTex = bellTexture();
@@ -72,11 +87,64 @@ export class Bell {
     mat.depthWrite = false;
     mat.side = THREE.DoubleSide;
 
-    const node = int(attribute("aNode"));
     const ring = attribute("aRing");
     const layer = attribute("aLayer");
-    const p = jelly.pos.element(node);
-    const n = jelly.nrm.element(node);
+
+    // ---- Catmull-Rom bicubic over the sim node grid ----
+    const floorT = (TSL as unknown as Record<string, any>).floor;
+    const crW = (f: any) => {
+      const f2 = f.mul(f), f3 = f2.mul(f);
+      return [
+        f3.mul(-0.5).add(f2).sub(f.mul(0.5)),
+        f3.mul(1.5).sub(f2.mul(2.5)).add(1),
+        f3.mul(-1.5).add(f2.mul(2)).add(f.mul(0.5)),
+        f3.mul(0.5).sub(f2.mul(0.5)),
+      ];
+    };
+    const crDW = (f: any) => {
+      const f2 = f.mul(f);
+      return [
+        f2.mul(-1.5).add(f.mul(2)).sub(0.5),
+        f2.mul(4.5).sub(f.mul(5)),
+        f2.mul(-4.5).add(f.mul(4)).add(0.5),
+        f2.mul(1.5).sub(f),
+      ];
+    };
+    const layerBase = int(layer).mul(int(NB1)).toVar();
+    // sim node lookup: meridian index tI (0 = apex, k = ring k-1, clamped), azimuth sI (wraps)
+    const nodeAt = (tI: any, sI: any) => {
+      const tc = tI.clamp(int(0), int(R));
+      const sm = sI.add(int(S * 4)).mod(int(S));
+      const isApex = tc.equal(int(0));
+      const ringNode = layerBase.add(int(1)).add(tc.sub(1).max(0).mul(int(S))).add(sm);
+      return jelly.pos.element(select(isApex, layerBase, ringNode));
+    };
+    const tf = attribute("aT").toVar();
+    const sf = attribute("aS").toVar();
+    const tI0 = int(floorT(tf.min(R - 0.001))).toVar();
+    const ft = tf.sub(floorT(tf.min(R - 0.001))).toVar();
+    const sI0 = int(floorT(sf)).toVar();
+    const fs2 = sf.sub(floorT(sf)).toVar();
+    const wT = crW(ft), wS = crW(fs2), dwT = crDW(ft), dwS = crDW(fs2);
+    // pure-expression accumulation (assign ops are not allowed outside a Fn body)
+    let p: any = null, dPds: any = null, dPdt: any = null;
+    for (let a = -1; a <= 2; a++) {
+      let rowP: any = null, rowD: any = null;
+      for (let b = -1; b <= 2; b++) {
+        const P = nodeAt(tI0.add(int(a)), sI0.add(int(b))).toVar();
+        const wp = P.mul(wS[b + 1]); const wd = P.mul(dwS[b + 1]);
+        rowP = rowP ? rowP.add(wp) : wp;
+        rowD = rowD ? rowD.add(wd) : wd;
+      }
+      rowP = rowP.toVar();
+      const tp = rowP.mul(wT[a + 1]); const ts = rowD.mul(wT[a + 1]); const tt = rowP.mul(dwT[a + 1]);
+      p = p ? p.add(tp) : tp;
+      dPds = dPds ? dPds.add(ts) : ts;
+      dPdt = dPdt ? dPdt.add(tt) : tt;
+    }
+    p = p.toVar(); dPds = dPds.toVar(); dPdt = dPdt.toVar();
+    // analytic spline normal (ring × meridian, same orientation as the sim's)
+    const n = normalize(cross(dPds, dPdt.add(vec3(0, -1e-5, 0)))).toVar();
 
     // paper-style fine detail + scalloped margin lobes, vertex-stage, outer shell only
     const sigmaV = atan(p.z.sub(this.uCenter.z), p.x.sub(this.uCenter.x));
