@@ -19,7 +19,7 @@ simulation on the GPU:
 | System | Method | Reference |
 | --- | --- | --- |
 | Sea water | Staggered-MAC-grid Euler fluid: red/black SOR projection + semi-Lagrangian advection, in compute | [Ten Minute Physics #17](https://matthias-research.github.io/pages/tenMinutePhysics/17-fluidSim.pdf) |
-| Jellyfish body | Two-layer (ex/subumbrellar) spring-mass shell: structural + shear + cross-shell springs, Hookean forces, substepped semi-implicit integration | [Rudolf & Mould 2009](https://gigl.scs.carleton.ca/node/114) |
+| Jellyfish body | Two-layer (ex/subumbrellar) spring-mass shell: structural + shear + cross-shell springs, Hookean forces, substepped semi-implicit integration | [Rudolf & Mould 2009](https://www.researchgate.net/publication/220868866_Interactive_Jellyfish_Animation_using_Simulation) |
 | Muscle | Subumbrellar ring + across-bell chord springs with rest lengths driven by a contraction wave (fast attack, slow release, apex→margin phase lag) | Rudolf & Mould §3.3 |
 | Coupling | Momentum exchange: each node relaxes toward the local fluid velocity; the opposite impulse is splatted trilinearly onto the grid faces (fixed-point i32 atomics) | Peskin-style immersed boundary, simplified |
 | Collisions | Spatial hash over bell nodes with atomic buckets (keeps plankton out of the bell) | [Ten Minute Physics #11](https://matthias-research.github.io/pages/tenMinutePhysics/11-hashing.pdf) |
