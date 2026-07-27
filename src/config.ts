@@ -52,8 +52,8 @@ export const CONF = {
   },
 
   // ---- trailing anatomy ----
-  tentacles: { count: 22, segs: 16, length: 2.0, damp: 0.985, iters: 8 },
-  arms: { count: 4, segs: 16, length: 1.45, damp: 0.99 },
+  tentacles: { count: 24, segs: 16, length: 2.6, damp: 0.985, iters: 8 },
+  arms: { count: 4, segs: 16, length: 2.4, damp: 0.99 },
 
   // ---- plankton tracer particles (they *are* the flow visualisation) ----
   particles: { count: LOW ? 16000 : 42000, size: 0.016, drift: 0.015 },
@@ -64,7 +64,7 @@ export const CONF = {
   // ---- rendering ----
   render: {
     maxPixelRatio: LOW ? 1.5 : 2,
-    bloom: { strength: 0.75, radius: 0.45, threshold: 0.12 },
+    bloom: { strength: 0.55, radius: 0.45, threshold: 0.32 },
     fogColor: 0x04101f,
   },
 } as const;

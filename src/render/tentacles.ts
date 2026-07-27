@@ -2,9 +2,10 @@
 import * as THREE from "three/webgpu";
 import { MeshBasicNodeMaterial } from "three/webgpu";
 import * as TSL from "three/tsl";
+import { armTexture } from "./textures";
 const {
-  attribute, uniform, float, int, vec3, normalize, cross, sin,
-  smoothstep, mix, clamp, cameraPosition, min,
+  attribute, uniform, float, int, vec2, vec3, normalize, cross, sin,
+  smoothstep, mix, clamp, cameraPosition, min, texture,
 } = TSL as unknown as Record<string, any>;
 import { CONF } from "../config";
 import type { Jellyfish } from "../sim/jellyfish";
@@ -61,21 +62,24 @@ export class Tentacles {
     const view = normalize(cameraPosition.sub(p)).toVar();
     const ribbonDir = normalize(cross(tang, view)).toVar();
 
-    // width: tentacles are threads; oral arms are frilly curtains that taper
-    const wTent = float(0.012).mul(segF.mul(0.75).oneMinus());
-    const wArm = float(0.075).mul(smoothstep(0, 0.18, segF)).mul(segF.mul(0.55).oneMinus());
+    // width: tentacles are dark threads; oral arms are wide frilly curtains
+    const wTent = float(0.011).mul(segF.mul(0.75).oneMinus());
+    const wArm = float(0.085).mul(smoothstep(0, 0.14, segF)).mul(segF.mul(0.45).oneMinus());
     const width = mix(wTent, wArm, isArm);
-    // slow ruffle on the arms
-    const ruffle = sin(segF.mul(9).add(this.uTime.mul(1.6)).add(chain.mul(2.1)))
-      .mul(0.03).mul(isArm).mul(segF);
+    // livelier ruffle on the arms
+    const ruffle = sin(segF.mul(11).add(this.uTime.mul(1.7)).add(chain.mul(2.1)))
+      .mul(0.05).mul(isArm).mul(segF);
     mat.positionNode = p.add(ribbonDir.mul(side.mul(width))).add(tang.mul(ruffle));
 
-    const tentCol = vec3(0.62, 0.85, 1.0);
-    const armCol = vec3(0.95, 0.72, 0.78);
-    mat.colorNode = mix(tentCol, armCol, isArm);
-    const fade = smoothstep(1.0, 0.15, segF);
-    const alphaT = fade.mul(0.35);
-    const alphaA = fade.mul(0.45);
+    // painted frill texture for the arms (Chrysaora's ribbon strip)
+    const armTex = armTexture();
+    const armUv = vec2(side.mul(0.5).add(0.5), segF.mul(1.0));
+    const armSample = texture(armTex, armUv).toVar();
+    const tentCol = vec3(0.72, 0.4, 0.28); // maroon sea-nettle tentacles
+    mat.colorNode = mix(tentCol, armSample.rgb.mul(0.8), isArm);
+    const fade = smoothstep(1.0, 0.2, segF);
+    const alphaT = fade.mul(0.38);
+    const alphaA = armSample.a.mul(fade).mul(0.42);
     mat.opacityNode = clamp(mix(alphaT, alphaA, isArm), 0, 1);
 
     this.mesh = new THREE.Mesh(geo, mat);

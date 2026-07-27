@@ -16,9 +16,9 @@ export class Environment {
     bgMat.side = THREE.BackSide;
     bgMat.depthWrite = false;
     const hNorm = clamp(positionWorld.y.div(30).add(0.5), 0, 1);
-    const deep = vec3(0.008, 0.035, 0.075);
-    const mid = vec3(0.02, 0.1, 0.19);
-    const top = vec3(0.10, 0.33, 0.47);
+    const deep = vec3(0.006, 0.028, 0.06);
+    const mid = vec3(0.02, 0.1, 0.17);
+    const top = vec3(0.16, 0.38, 0.46);
     const grad = mix(deep, mix(mid, top, smoothstep(0.55, 1.0, hNorm)), smoothstep(0.1, 0.85, hNorm));
     bgMat.colorNode = grad;
     const bg = new THREE.Mesh(new THREE.SphereGeometry(38, 24, 16), bgMat);
@@ -48,6 +48,23 @@ export class Environment {
       this.shafts.add(plane);
     }
     this.group.add(this.shafts);
+
+    // warm sun glow far above — gives the amber palette its light source
+    const glowMat = new MeshBasicNodeMaterial();
+    glowMat.transparent = true;
+    glowMat.depthWrite = false;
+    glowMat.blending = THREE.AdditiveBlending;
+    glowMat.side = THREE.DoubleSide;
+    const gu = uv();
+    const d = gu.sub(0.5).length();
+    glowMat.colorNode = vec3(1.0, 0.85, 0.6);
+    glowMat.opacityNode = smoothstep(0.5, 0.0, d).pow(2.2).mul(0.5);
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), glowMat);
+    glow.position.set(2, 16, -6);
+    glow.rotation.x = Math.PI / 2;
+    glow.renderOrder = -6;
+    glow.frustumCulled = false;
+    this.group.add(glow);
     void float;
   }
 
