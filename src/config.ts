@@ -38,10 +38,17 @@ export const CONF = {
     kThick: 2600,       // cross-shell springs (bending stiffness of the two-layer shell)
     kMuscleBase: 2200,  // circumferential muscle springs (subumbrellar shell)
     kDamp: 10,          // spring damping (along spring axis)
-    globalDamp: 0.45,   // per-second viscous damping on node velocity
+    // NOTE: keep tiny — this damps ABSOLUTE node velocity (an "ether drag") and any
+    // real value anchors the body to the world frame, killing locomotion. Internal
+    // oscillations are already handled by kDamp + the fluid coupling.
+    globalDamp: 0.06,
     substeps: 8,        // spring substeps per frame
-    sink: 0.055,        // gravity minus buoyancy (net slow sink when idle)
+    sink: 0.04,         // gravity minus buoyancy (net slow sink when idle)
     drag: 26.0,         // fluid↔body momentum-exchange coefficient (bell)
+    // Sub-grid jet model: the coarse fluid grid under-resolves the expelled jet's
+    // momentum flux (the paper's IBM transfers it via pressure; drag coupling can't).
+    // Reaction accel = jetK × d(activation)/dt during the power stroke.
+    jetK: 0.32,
     dragTentacle: 3.0,
     muscle: {
       freq: 0.8,        // Hz — near the resonant gait of a real medusa (paper §3.3)

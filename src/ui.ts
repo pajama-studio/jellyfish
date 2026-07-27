@@ -27,6 +27,11 @@ export function wireUI(jelly: Jellyfish, plankton: Plankton, flow: FlowField, be
     drag.value = String(CONF.jelly.drag);
     drag.addEventListener("input", () => (jelly.drag = Number(drag.value)));
   }
+  const jet = $("uiJet");
+  if (jet) {
+    jet.value = String(CONF.jelly.jetK);
+    jet.addEventListener("input", () => (jelly.jetK = Number(jet.value)));
+  }
   const glow = $("uiGlow");
   if (glow) {
     glow.value = "1";

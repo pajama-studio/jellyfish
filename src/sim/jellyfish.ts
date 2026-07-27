@@ -47,12 +47,14 @@ export class Jellyfish {
   readonly uMomTent = uniform(0.08);
   readonly uDtSub = uniform(1 / 480);
   readonly uDtFrame = uniform(1 / 60);
+  readonly uJet = uniform(0); // sub-grid jet reaction accel (see config jetK)
   readonly uK = uniform(new THREE.Vector4(J.kStruct, J.kShear, J.kThick, J.kMuscleBase));
 
   /** current margin activation 0..1 (CPU mirror, for render ripples) */
   actVis = 0;
   drag: number = J.drag;
   freq: number = J.muscle.freq;
+  jetK: number = J.jetK;
   pulse = 0; // click boost, decays
 
   private kForce: any; private kIntegrate: any; private kCouple: any; private kNormals: any; private kTent: any; private kCentroid: any;
@@ -186,7 +188,7 @@ export class Jellyfish {
       const i = instanceIndex;
       const p = this.pos.element(i).toVar();
       const v = this.vel.element(i).toVar();
-      const F = vec3(0, float(J.sink).negate(), 0).toVar();
+      const F = vec3(0, this.uJet.sub(J.sink), 0).toVar();
       Loop({ start: int(0), end: int(MAX_ADJ), type: "int", name: "s" }, ({ s }: any) => {
         const slot = int(i).mul(int(MAX_ADJ)).add(s);
         const j = this.adjIdx.element(slot).toVar();
@@ -320,10 +322,14 @@ export class Jellyfish {
     const boost = 1 + this.pulse * 0.75;
     this.uPhase.value += d * this.freq * (1 + this.pulse * 0.5);
     this.uContract.value = Math.min(0.6, CONF.jelly.muscle.contract * boost * (this.userContract / CONF.jelly.muscle.contract));
-    // CPU mirror of margin activation, for render-side ripples
+    // CPU mirror of margin activation, for render-side ripples + the jet model
+    const prevAct = this.actVis;
     const ph = (this.uPhase.value - this.uWave.value) % 1;
     const atk = J.muscle.attack;
     this.actVis = ph < atk ? ph / atk : 1 - Math.min(1, (ph - atk) / (1 - atk));
+    // sub-grid jet reaction: fires only while the muscle is actively contracting
+    const actRate = Math.max(0, (this.actVis - prevAct) / Math.max(d, 1e-4));
+    this.uJet.value = this.jetK * actRate * (1 + this.pulse * 0.8);
 
     this.uDtFrame.value = d;
     this.uDtSub.value = d / J.substeps;
